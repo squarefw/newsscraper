@@ -76,6 +76,10 @@ reports/*.csv
 # Test outputs
 test-output/
 
+# Examples and sample data - contains URLs, test data, etc.
+examples/
+!examples/README.md
+
 # Browser cache and automation artifacts  
 .browser_cache/
 screenshots/
