@@ -4,7 +4,7 @@
  */
 
 const axios = require('axios');
-const { extractNewsFromUrl } = require('../tools/production/batch-ai-push-enhanced');
+const { extractNewsFromUrl } = require('../tools/production/batch-ai-push');
 
 let titleCache = null;
 let cacheTimestamp = 0;

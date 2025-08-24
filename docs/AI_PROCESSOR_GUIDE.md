@@ -190,7 +190,7 @@ const config = {
 ### 现有脚本支持
 
 已更新的脚本：
-- ✅ `tools/batch-ai-push-enhanced.js`
+- ✅ `tools/batch-ai-push.js`
 
 计划更新：
 - 🔄 `tools/test-ai.js`

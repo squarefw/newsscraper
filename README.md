@@ -50,7 +50,7 @@ npm run push      # 内容推送
 │   └── ai-prompts.json          # AI提示配置
 ├── tools/production/
 │   ├── discover-and-queue.js    # 新闻发现主程序
-│   └── batch-ai-push-enhanced.js # 内容处理推送
+│   └── batch-ai-push.js          # 内容处理推送
 ├── utils/                       # 核心工具模块
 ├── examples/
 │   └── pending-urls.txt         # URL队列文件
@@ -72,7 +72,7 @@ npm run push      # 内容推送
 
 1. `discover-and-queue.js` 监控新闻源，发现新文章
 2. AI 去重筛选，将新文章URL写入队列
-3. 自动调用 `batch-ai-push-enhanced.js` 处理内容并推送到WordPress
+3. 自动调用 `batch-ai-push.js` 处理内容并推送到WordPress
 
 ## 系统要求
 

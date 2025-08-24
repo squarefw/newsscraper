@@ -1,18 +1,19 @@
 {
   "api": {
     "enabled": false,
-    "baseUrl": "http://192.168.1.230:8080/api",
+    "baseUrl": "http://8.208.23.37/api",
     "apiKey": "DISABLED_FOR_WORDPRESS_ONLY",
     "email": "FROM_API_KEYS_CONFIG",
     "password": "FROM_API_KEYS_CONFIG"
   },
   "wordpress": {
     "enabled": true,
-    "baseUrl": "http://192.168.1.230:8080",
+    "baseUrl": "http://8.208.23.37",
     "username": "FROM_API_KEYS_CONFIG",
     "password": "FROM_API_KEYS_CONFIG",
     "defaultStatus": "draft",
-    "defaultCategory": "新闻",
+    "defaultCategory": "Technology",
+    "apiMethod": "auto",
     "categoryConstraints": {
       "enabled": true,
       "allowNewCategories": false,

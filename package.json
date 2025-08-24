@@ -2,9 +2,9 @@
   "name": "newsscraper",
   "version": "1.0.0",
   "description": "Automated news content scraper with AI optimization and API integration.",
-  "main": "tools/production/batch-ai-push-enhanced.js",
+  "main": "tools/production/batch-ai-push.js",
   "scripts": {
-    "start": "node tools/production/batch-ai-push-enhanced.js config/config.remote-230.json examples/wordpress-test-urls.txt",
+    "start": "node tools/production/batch-ai-push.js config/config.remote-230.json examples/wordpress-test-urls.txt",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [

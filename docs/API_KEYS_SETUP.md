@@ -78,7 +78,7 @@ nano config/api-keys.local.json
 
 ```bash
 # 原有命令无需更改，会自动加载密钥
-node tools/production/batch-ai-push-enhanced.js config/config.remote-230.json
+node tools/production/batch-ai-push.js config/config.remote-230.json
 ```
 
 ### 手动加载配置

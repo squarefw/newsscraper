@@ -3,12 +3,20 @@
 /**
  * NewsScraper V4 - 新闻源AI自动发现与智能去重系统
  * 
+ * 用法:
+ *   node discover-and-queue.js [配置文件路径]
+ * 
+ * 例子:
+ *   node discover-and-queue.js                                    # 使用默认配置
+ *   node discover-and-queue.js config/config.remote-aliyun.json  # 使用阿里云配置
+ *   node discover-and-queue.js config/config.remote-230.json     # 使用230配置
+ * 
  * 职责:
  * 1. 监控配置文件中指定的新闻源。
  * 2. 使用AI发现与关键词相关的新文章链接。
  * 3. 使用AI对新文章进行去重检查。
  * 4. 将唯一的、新的文章URL写入队列文件。
- * 5. (可选) 自动触发 `batch-ai-push-enhanced.js` 进行后续处理。
+ * 5. (可选) 自动触发 `batch-ai-push.js` 进行后续处理。
  */
 
 const fs = require('fs');
@@ -17,11 +25,31 @@ const axios = require('axios');
 const { exec } = require('child_process');
 
 // --- 动态加载模块 ---
+const ConfigLoader = require('../../config/config-loader');
 const { MultiAIManager } = require('../../utils/multiAIManager');
 const { findRelevantLinks, isGoogleNews } = require('../../utils/sourceAnalyzer_new'); // 使用增强版
 const { isDuplicate } = require('../../utils/wordpressDeduplicator');
 const { resolveGoogleNewsUrls } = require('../../utils/puppeteerResolver_enhanced');
 const NewsArticleFilter = require('../../utils/newsArticleFilter');
+
+/**
+ * 获取配置文件路径
+ */
+const getConfigPath = () => {
+  const args = process.argv.slice(2);
+  let configPath = 'config/config.remote-230.json'; // 默认配置
+  
+  if (args.length >= 1) {
+    configPath = args[0];
+  }
+  
+  // 如果配置路径是相对路径，相对于项目根目录解析
+  if (!path.isAbsolute(configPath)) {
+    configPath = path.resolve(__dirname, '../../', configPath);
+  }
+  
+  return configPath;
+};
 
 /**
  * 加载配置文件
@@ -32,7 +60,14 @@ const loadConfig = (configPath) => {
     if (!fs.existsSync(configPath)) {
       throw new Error(`配置文件不存在: ${configPath}`);
     }
-    return JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    
+    // 使用ConfigLoader自动注入API密钥
+    const configLoader = new ConfigLoader();
+    const environment = configLoader.inferEnvironment(configPath);
+    const config = configLoader.loadConfig(configPath, environment);
+    
+    console.log(`✅ 配置加载成功，环境: ${environment}`);
+    return config;
   } catch (error) {
     throw new Error(`配置文件加载失败: ${error.message}`);
   }
@@ -153,8 +188,10 @@ async function main() {
 
   try {
     // 1. 加载配置
-    const configPath = path.resolve(__dirname, '../../config/config.remote-230.json');
+    const configPath = getConfigPath();
     const config = loadConfig(configPath);
+
+    console.log(`📋 使用配置文件: ${configPath}`);
 
     if (!config.discovery?.enabled) {
       console.log('🟡 新闻发现功能未在配置中启用，脚本退出。');
@@ -276,12 +313,12 @@ async function main() {
       fs.writeFileSync(outputPath, finalLinks.join('\n'), 'utf8');
       console.log(`\n✅ Successfully wrote ${finalLinks.length} new links to: ${outputPath}`);
 
-      // 8. (可选) 触发后续处理脚本
-      console.log('\n🚀 Triggering downstream processing...');
+      // 8. (可选) 触发后续处理脚本 - 使用修复版脚本
+      console.log('\n🚀 Triggering downstream processing with fixed WordPress connector...');
       const { spawn } = require('child_process');
       const command = 'node';
       const args = [
-        path.resolve(__dirname, 'batch-ai-push-enhanced.js'),
+        path.resolve(__dirname, 'batch-ai-push.js'),
         configPath,
         outputPath
       ];

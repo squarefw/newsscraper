@@ -64,7 +64,7 @@ config/category-backup.json      # 自动生成的分类备份
 ### 1. 基本使用（批量处理脚本）
 ```bash
 # 脚本会自动获取远程分类
-node tools/batch-ai-push-enhanced.js config/config.remote-230.json urls.txt
+node tools/batch-ai-push.js config/config.remote-230.json urls.txt
 ```
 
 ### 2. 手动获取分类信息
@@ -183,7 +183,7 @@ Authorization: Bearer your-api-key
 node tools/test-dynamic-categories.js
 
 # 查看详细日志
-DEBUG=category-manager node tools/batch-ai-push-enhanced.js
+DEBUG=category-manager node tools/batch-ai-push.js
 ```
 
 ## 📊 性能优化
