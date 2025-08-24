@@ -18,7 +18,7 @@ const sensitivePatterns = [
   { pattern: /github_pat_[a-zA-Z0-9_]{82}/, name: 'GitHub Personal Access Token' },
   { pattern: /AIzaSy[a-zA-Z0-9_-]{33}/, name: 'Google API密钥' },
   { pattern: /"password":\s*"(?!FROM_API_KEYS_CONFIG|YOUR_)[^"]{3,}"/, name: '明文密码' },
-  { pattern: /"apiKey":\s*"(?!FROM_API_KEYS_CONFIG|YOUR_)[^"]{10,}"/, name: 'API密钥' },
+  { pattern: /"apiKey":\s*"(?!FROM_API_KEYS_CONFIG|YOUR_|DISABLED_)[^"]{10,}"/, name: 'API密钥' },
 ];
 
 // 检查将要提交的文件
