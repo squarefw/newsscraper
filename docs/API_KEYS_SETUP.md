@@ -36,18 +36,18 @@ nano config/api-keys.local.json
   "wordpress": {
     "remote-230": {
       "username": "你的WordPress用户名",
-      "password": "你的WordPress密码"
+      "password": "YOUR_PASSWORD"
     }
   },
   "ai": {
     "openai": {
-      "apiKey": "你的OpenAI API密钥"
+      "apiKey": "YOUR_API_KEY"
     },
     "gemini": {
-      "apiKey": "你的Gemini API密钥"
+      "apiKey": "YOUR_API_KEY"
     },
     "siliconflow": {
-      "apiKey": "你的SiliconFlow API密钥"
+      "apiKey": "YOUR_API_KEY"
     }
     // ... 其他AI引擎密钥
   }
