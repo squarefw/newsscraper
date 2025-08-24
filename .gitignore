@@ -24,13 +24,13 @@ logs/
 # Config files with sensitive data
 config/config.development.json
 config/config.production.json
-config/config.remote*.json
 config/config.wordpress.json
 
 # API Keys - NEVER commit these files
 config/api-keys.local.json
 config/api-keys.private.json
-config/*-keys.json
+config/*-keys.local.json
+config/*-keys.private.json
 config/*-secrets.json
 
 # IDE

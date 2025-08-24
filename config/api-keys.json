@@ -1,0 +1,50 @@
+{
+  "_README": "此文件包含敏感的API密钥，不应上传到Git仓库。复制此文件为api-keys.json并填入真实的API密钥。",
+  "_SECURITY_WARNING": "请确保此文件已添加到.gitignore中，以防止敏感信息泄露。",
+  
+  "wordpress": {
+    "remote-230": {
+      "username": "admin",
+      "password": "YOUR_WORDPRESS_PASSWORD"
+    },
+    "remote-aliyun": {
+      "username": "admin", 
+      "password": "YOUR_WORDPRESS_PASSWORD"
+    }
+  },
+
+  "api": {
+    "remote-230": {
+      "email": "admin",
+      "password": "YOUR_API_PASSWORD"
+    },
+    "remote-aliyun": {
+      "email": "admin",
+      "password": "YOUR_API_PASSWORD" 
+    }
+  },
+
+  "ai": {
+    "openai": {
+      "apiKey": "YOUR_OPENAI_API_KEY"
+    },
+    "gemini": {
+      "apiKey": "YOUR_GEMINI_API_KEY"
+    },
+    "siliconflow": {
+      "apiKey": "YOUR_SILICONFLOW_API_KEY"
+    },
+    "openrouter": {
+      "apiKey": "YOUR_OPENROUTER_API_KEY"
+    },
+    "github": {
+      "apiKey": "YOUR_GITHUB_API_KEY"
+    },
+    "qwen_dev": {
+      "apiKey": "YOUR_QWEN_DEV_API_KEY"
+    },
+    "qwen": {
+      "apiKey": "YOUR_QWEN_API_KEY"
+    }
+  }
+}

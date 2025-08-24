@@ -1,0 +1,161 @@
+{
+  "api": {
+    "enabled": false,
+    "baseUrl": "http://192.168.1.230:8080/api",
+    "apiKey": "DISABLED_FOR_WORDPRESS_ONLY",
+    "email": "FROM_API_KEYS_CONFIG",
+    "password": "FROM_API_KEYS_CONFIG"
+  },
+  "wordpress": {
+    "enabled": true,
+    "baseUrl": "http://192.168.1.230:8080",
+    "username": "FROM_API_KEYS_CONFIG",
+    "password": "FROM_API_KEYS_CONFIG",
+    "defaultStatus": "draft",
+    "defaultCategory": "新闻",
+    "categoryConstraints": {
+      "enabled": true,
+      "allowNewCategories": false,
+      "fallbackCategory": "未分类",
+      "cacheDuration": 3600000
+    },
+    "contentEnhancement": {
+      "addSourceLink": true,
+      "sourceLinkTemplate": "\n\n来源链接: {title} ({url})",
+      "addPublishDate": true,
+      "publishDateTemplate": "\n\n发布时间: {date}"
+    }
+  },
+  "ai": {
+    "enabled": true,
+    "processingMode": "original", 
+    "defaultEngine": "qwen",
+    "taskEngines": {
+      "translate": "qwen",
+      "rewrite": "qwen", 
+      "summarize": "siliconflow",
+      "extract_keywords": "siliconflow",
+      "categorize": "siliconflow",
+      "sentiment": "siliconflow",
+      "custom_title_translate": "siliconflow",
+      "custom_title_generate": "siliconflow",
+      "article_filter": "qwen",
+      "deduplication": "qwen"
+    },
+    "fallbackStrategy": "useDefault",
+    "engines": {
+      "ollama": {
+        "baseUrl": "http://localhost:11434",
+        "model": "qwen3:8b",
+        "maxTokens": 2000,
+        "temperature": 0.3,
+        "timeout": 300000
+      },
+      "openai": {
+        "apiKey": "FROM_API_KEYS_CONFIG",
+        "model": "gpt-4o-mini",
+        "maxTokens": 4000,
+        "temperature": 0.3,
+        "timeout": 30000
+      },
+      "gemini": {
+        "apiKey": "FROM_API_KEYS_CONFIG", 
+        "model": "gemini-1.5-flash",
+        "maxTokens": 4000,
+        "temperature": 0.3,
+        "timeout": 30000
+      },
+      "siliconflow": {
+        "apiKey": "FROM_API_KEYS_CONFIG",
+        "baseUrl": "https://api.siliconflow.cn",
+        "model": "THUDM/GLM-4.1V-9B-Thinking",
+        "maxTokens": 4000,
+        "temperature": 0.3,
+        "timeout": 30000
+      },
+      "openrouter": {
+        "apiKey": "FROM_API_KEYS_CONFIG",
+        "baseUrl": "https://openrouter.ai/api/v1",
+        "model": "meta-llama/llama-3.2-3b-instruct:free",
+        "maxTokens": 2000,
+        "temperature": 0.3,
+        "timeout": 45000,
+        "retryDelay": 5000,
+        "maxRetries": 2
+      },
+      "github": {
+        "apiKey": "FROM_API_KEYS_CONFIG",
+        "baseUrl": "https://models.github.ai",
+        "model": "openai/gpt-4o-mini",
+        "maxTokens": 4000,
+        "temperature": 0.3,
+        "timeout": 30000
+      },
+      "qwen_dev": {
+        "apiKey": "FROM_API_KEYS_CONFIG",
+        "model": "qwen-long",
+        "maxTokens": 8000,
+        "temperature": 0.3,
+        "timeout": 180000
+      },
+      "qwen": {
+        "apiKey": "FROM_API_KEYS_CONFIG",
+        "model": "qwen-long",
+        "maxTokens": 8000,
+        "temperature": 0.3,
+        "timeout": 180000
+      }
+    },
+    "tasks": [
+      "translate",
+      "rewrite", 
+      "categorize",
+      "article_filter",
+      "deduplication"
+    ]
+  },
+  "filter": {
+    "keywords": [
+      "都柏林",
+      "爱尔兰",
+      "爱尔兰人",
+      "爱尔兰新闻",
+      "ireland",
+      "irish",
+      "dublin",
+      "科技",
+      "新闻",
+      "资讯"
+    ]
+  },
+  "testMode": true,
+  "discovery": {
+    "enabled": true,
+    "outputUrlFile": "examples/pending-urls.txt",
+    "targetsFile": "config/targets.json",
+    "urlResolver": {
+      "maxRedirects": 30,
+      "timeout": 20000,
+      "retryDelay": 3000,
+      "maxRetries": 5
+    },
+    "deduplication": {
+      "enabled": true,
+      "recentPostsCount": 50,
+      "cacheDuration": 3600000,
+      "confidenceThreshold": "high",
+      "enableCache": true,
+      "enableOptimized": false
+    },
+    "articleFilter": {
+      "enabled": true,
+      "aiEngine": "gemini", 
+      "maxLinksToAnalyze": 10000,
+      "confidenceThreshold": 5,
+      "reporting": {
+        "enabled": true,
+        "reportPath": "examples/filter-report.txt"
+      }
+    }
+  }
+}
