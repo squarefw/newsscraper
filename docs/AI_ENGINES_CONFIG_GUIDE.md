@@ -39,7 +39,7 @@ NewsScraper支持5种AI引擎，每种引擎都有其特定的配置要求和优
   "enabled": true,
   "engine": "openai",
   "openai": {
-    "apiKey": "YOUR_OPENAI_API_KEY",
+    "apiKey": "YOUR_OPENROUTER_API_KEY",
     "model": "gpt-4o-mini",
     "maxTokens": 4000,
     "temperature": 0.3

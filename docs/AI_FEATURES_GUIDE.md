@@ -56,7 +56,7 @@ NewsScraper 集成了强大的AI功能，可以自动处理、优化和本地化
     "enabled": true,
     "engine": "openai",
     "openai": {
-      "apiKey": "your-openai-api-key",
+      "apiKey": "YOUR_API_KEY",
       "model": "gpt-4"
     }
   }
@@ -73,7 +73,7 @@ NewsScraper 集成了强大的AI功能，可以自动处理、优化和本地化
     "enabled": true,
     "engine": "gemini",
     "gemini": {
-      "apiKey": "your-gemini-api-key",
+      "apiKey": "YOUR_API_KEY",
       "model": "gemini-pro"
     }
   }
@@ -90,7 +90,7 @@ NewsScraper 集成了强大的AI功能，可以自动处理、优化和本地化
     "enabled": true,
     "engine": "siliconflow",
     "siliconflow": {
-      "apiKey": "your-siliconflow-api-key",
+      "apiKey": "YOUR_API_KEY",
       "model": "qwen-plus"
     }
   }
@@ -107,7 +107,7 @@ NewsScraper 集成了强大的AI功能，可以自动处理、优化和本地化
     "enabled": true,
     "engine": "openrouter",
     "openrouter": {
-      "apiKey": "your-openrouter-api-key",
+      "apiKey": "YOUR_API_KEY",
       "model": "anthropic/claude-3.5-sonnet"
     }
   }

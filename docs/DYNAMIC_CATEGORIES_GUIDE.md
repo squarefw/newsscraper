@@ -43,7 +43,7 @@ config/category-backup.json      # 自动生成的分类备份
     "enabled": true,
     "baseUrl": "http://192.168.1.230:8080",
     "username": "admin",
-    "password": "your-password"
+    "password": "YOUR_PASSWORD"
   }
 }
 ```
@@ -54,7 +54,7 @@ config/category-backup.json      # 自动生成的分类备份
   "api": {
     "enabled": true,
     "baseUrl": "https://your-api-server.com",
-    "apiKey": "your-api-key"
+    "apiKey": "YOUR_API_KEY"
   }
 }
 ```

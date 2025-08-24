@@ -144,7 +144,7 @@ NODE_ENV=remote-230 node tools/production/batch-ai-push-enhanced.js examples/wor
     "enabled": true,
     "baseUrl": "http://192.168.1.230:8080",
     "username": "squarefw@gmail.com",
-    "password": "your-wp-application-password",
+    "password": "YOUR_WORDPRESS_PASSWORD",
     "defaultStatus": "draft",
     "categoryConstraints": {
       "enabled": true,

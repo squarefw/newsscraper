@@ -1,9 +1,0 @@
-# AI质量测试专用URL列表
-# 每行一个URL，以#开头的行为注释
-
-# BBC新闻 - 特朗普关税政策
-https://www.bbc.com/news/articles/cly7244rx3ko
-
-# 可以添加更多测试URL
-# https://example.com/news/article1
-# https://example.com/news/article2

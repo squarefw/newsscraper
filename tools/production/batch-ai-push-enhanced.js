@@ -8,6 +8,9 @@
 const fs = require('fs');
 const path = require('path');
 
+// 引入配置加载器
+const ConfigLoader = require('../../config/config-loader');
+
 // 从命令行参数读取配置
 const getConfig = () => {
   const args = process.argv.slice(2);
@@ -39,8 +42,13 @@ const loadConfig = (configPath) => {
     if (!fs.existsSync(configPath)) {
       throw new Error(`配置文件不存在: ${configPath}`);
     }
-    const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    console.log(`✅ 配置加载成功`);
+    
+    // 使用ConfigLoader自动注入API密钥
+    const configLoader = new ConfigLoader();
+    const environment = configLoader.inferEnvironment(configPath);
+    const config = configLoader.loadConfig(configPath, environment);
+    
+    console.log(`✅ 配置加载成功，环境: ${environment}`);
     return config;
   } catch (error) {
     throw new Error(`配置文件加载失败: ${error.message}`);
@@ -369,7 +377,7 @@ async function main() {
     console.log(`📋 推送模式: ${pushMode.toUpperCase()}`);
 
     console.log('📋 配置信息:');
-    console.log(`  AI引擎: ${config.ai.engine}`);
+    console.log(`  AI引擎: ${config.ai.defaultEngine}`);
     
     if (pushMode === 'wordpress') {
       console.log(`  WordPress地址: ${config.wordpress.baseUrl}`);

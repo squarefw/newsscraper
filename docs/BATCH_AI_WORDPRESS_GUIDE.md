@@ -45,7 +45,7 @@
     "enabled": true,
     "baseUrl": "http://192.168.1.230:8080",
     "username": "squarefw@gmail.com",
-    "password": "your-application-password",
+    "password": "YOUR_API_PASSWORD",
     "defaultStatus": "draft",
     "categoryConstraints": {
       "enabled": true,
@@ -100,7 +100,7 @@ NODE_ENV=remote-230 node tools/batch-ai-push-enhanced.js examples/wordpress-test
     "enabled": true,              // 启用/禁用 WordPress 功能
     "baseUrl": "http://...",      // WordPress 站点 URL
     "username": "用户名",          // WordPress 用户名
-    "password": "应用密码",        // WordPress 应用密码
+    "password": "YOUR_PASSWORD",        // WordPress 应用密码
     "defaultStatus": "draft"      // 默认文章状态：draft/publish/private
   }
 }

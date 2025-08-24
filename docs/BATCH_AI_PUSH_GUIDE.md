@@ -77,7 +77,7 @@ https://www.rte.ie/news/business/2025/0730/1234568-business-news/
 {
   "api": {
     "baseUrl": "http://your-api-server.com/api",
-    "apiKey": "your-api-key-here"
+    "apiKey": "YOUR_API_KEY"
   },
   "ai": {
     "enabled": true,
@@ -98,7 +98,7 @@ https://www.rte.ie/news/business/2025/0730/1234568-business-news/
     "engine": "openrouter",
     "tasks": ["translate", "rewrite", "summarize", "extract_keywords", "categorize", "sentiment"],
     "openrouter": {
-      "apiKey": "your-openrouter-api-key",
+      "apiKey": "YOUR_API_KEY",
       "model": "qwen/qwen3-235b-a22b:free",
       "baseUrl": "https://openrouter.ai/api/v1"
     }

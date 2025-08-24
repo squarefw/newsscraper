@@ -39,13 +39,13 @@ https://your-site.com/wp-json/wp/v2/posts
 {
   "api": {
     "baseUrl": "http://localhost:3000/api",
-    "apiKey": "your-existing-api-key"
+    "apiKey": "YOUR_API_KEY"
   },
   "wordpress": {
     "enabled": true,
     "baseUrl": "https://your-wordpress-site.com",
     "username": "your-wp-username",
-    "password": "xxxx xxxx xxxx xxxx",
+    "password": "YOUR_PASSWORD",
     "defaultStatus": "draft",
     "defaultCategory": "新闻"
   },

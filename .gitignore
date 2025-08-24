@@ -27,6 +27,12 @@ config/config.production.json
 config/config.remote*.json
 config/config.wordpress.json
 
+# API Keys - NEVER commit these files
+config/api-keys.local.json
+config/api-keys.private.json
+config/*-keys.json
+config/*-secrets.json
+
 # IDE
 .vscode/
 .idea/

@@ -33,7 +33,7 @@ NewsScraper 现在支持多AI引擎分工合作，不同的AI任务可以由不�
         "timeout": 60000
       },
       "openai": {
-        "apiKey": "YOUR_OPENAI_API_KEY",
+        "apiKey": "YOUR_OPENROUTER_API_KEY",
         "model": "gpt-4o-mini",
         "maxTokens": 4000,
         "temperature": 0.3,
@@ -119,7 +119,7 @@ NewsScraper 现在支持多AI引擎分工合作，不同的AI任务可以由不�
 #### OpenAI
 ```json
 "openai": {
-  "apiKey": "YOUR_OPENAI_API_KEY",
+  "apiKey": "YOUR_OPENROUTER_API_KEY",
   "model": "gpt-4o-mini",
   "maxTokens": 4000,
   "temperature": 0.3,

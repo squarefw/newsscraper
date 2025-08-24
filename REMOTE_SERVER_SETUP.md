@@ -30,12 +30,12 @@
 
 编辑 `config/config.remote-230.json`，找到这一行：
 ```json
-"password": "your-wp-application-password-here"
+"password": "YOUR_WORDPRESS_PASSWORD"
 ```
 
 替换为您刚才复制的应用密码：
 ```json
-"password": "abcd efgh ijkl mnop"
+"password": "YOUR_PASSWORD"
 ```
 
 ### 步骤 3: 测试连接

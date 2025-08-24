@@ -1,8 +1,0 @@
-# 测试标题优化功能
-# 这些是一些测试URL，用于验证标题长度优化
-
-# BBC 新闻 - 通常有较长的英文标题
-https://www.bbc.com/news/world-europe-68123456
-
-# 其他测试URL
-https://example-news.com/article/sample-news-1
