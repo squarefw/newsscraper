@@ -1,0 +1,40 @@
+{
+  "name": "newsscraper",
+  "version": "1.0.0",
+  "description": "Automated news content scraper with AI optimization and API integration.",
+  "main": "tools/production/batch-ai-push-enhanced.js",
+  "scripts": {
+    "start": "node tools/production/batch-ai-push-enhanced.js config/config.remote-230.json examples/wordpress-test-urls.txt",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "news",
+    "scraper",
+    "ai",
+    "automation",
+    "wordpress"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "@types/node-cron": "^3.0.11",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^4.9.5"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "axios": "^1.11.0",
+    "cheerio": "^1.1.2",
+    "dotenv": "^16.0.0",
+    "node-cron": "^3.0.0",
+    "node-fetch": "^2.7.0",
+    "openai": "^5.11.0",
+    "protobufjs": "^7.5.4",
+    "puppeteer": "^24.17.0",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "winston": "^3.8.2",
+    "xml2js": "^0.6.2"
+  }
+}

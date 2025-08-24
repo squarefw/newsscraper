@@ -1,0 +1,40 @@
+[
+  {
+    "name": "BBC News",
+    "url": "https://www.bbc.com/news",
+    "schedule": "0 */6 * * *",
+    "aiSearchEnabled": true,
+    "aiExtractionEnabled": true,
+    "enabled": false,
+    "keywords": ["technology", "business", "science", "world"]
+  },
+  {
+    "name": "RTE爱尔兰新闻",
+    "url": "https://www.rte.ie/news/",
+    "schedule": "0 */6 * * *",
+    "aiSearchEnabled": true,
+    "aiExtractionEnabled": true,
+    "enabled": false,
+    "keywords": ["ireland", "dublin", "politics", "housing", "irish"]
+  },
+  {
+    "name": "Google News - Dublin",
+    "url": "https://news.google.com/topics/CAAqJQgKIh9DQkFTRVFvSUwyMHZNREpqWm5RU0JXVnVMVWRDS0FBUAE?ceid=IE:en&oc=3",
+    "schedule": "0 */3 * * *",
+    "aiSearchEnabled": true,
+    "aiExtractionEnabled": true,
+    "enabled": true,
+    "keywords": ["dublin", "ireland", "irish", "dublin city", "temple bar"],
+    "type": "google-news"
+  },
+  {
+    "name": "Google News - Ireland",
+    "url": "https://news.google.com/topics/CAAqJQgKIh9DQkFTRVFvSUwyMHZNRE55ZERrU0JXVnVMVWRDS0FBUAE?ceid=IE:en&oc=3",
+    "schedule": "0 */4 * * *",
+    "aiSearchEnabled": true,
+    "aiExtractionEnabled": true,
+    "enabled": false,
+    "keywords": ["ireland", "irish", "politics", "economy", "housing", "cork", "galway"],
+    "type": "google-news"
+  }
+]

@@ -1,0 +1,15 @@
+# NewsScraper 批量处理与推送URL列表
+# 以 # 开头的行为注释，会被忽略
+# 每行一个URL
+
+# BBC新闻示例
+https://www.bbc.com/news/world-europe-68123456
+https://www.bbc.com/news/technology-68234567
+
+# RTE新闻示例
+https://www.rte.ie/news/world/2025/0730/1234567-example-news/
+https://www.rte.ie/news/business/2025/0730/1234568-business-news/
+
+# 其他新闻网站
+https://example-news.com/article/sample-news-1
+https://example-news.com/article/sample-news-2

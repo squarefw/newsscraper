@@ -1,0 +1,18 @@
+# WordPress 增强版测试URL列表
+# 针对 192.168.1.230:8080 服务器的测试
+
+# BBC 新闻 - 科技类
+https://www.bbc.com/news/articles/cly7244rx3ko
+https://www.bbc.com/news/articles/c99mxlym3lko
+https://www.bbc.com/news/articles/c93dgr2dd53o
+https://www.bbc.com/news/articles/cger99z0yp9o
+
+# RTE 新闻 - 爱尔兰本地
+https://www.rte.ie/news/2025/0801/1526441-us-tariffs/
+https://www.rte.ie/news/ireland/2025/0801/1526538-storm-floris/
+https://www.rte.ie/news/ireland/2025/0801/1526607-eu-bank-stress-test/
+https://www.rte.ie/news/ireland/2025/0801/1526454-garda-report/
+
+# 示例新闻（如果上述URL无效，请替换为真实URL）
+https://www.irishnews.com/news/northern-ireland/botched-process-sees-mining-giants-surrender-controversial-prospecting-licences-6ROXQ4FX75HUZAJJC4UZM4BNBM/
+https://www.irishnews.com/sport/rugby/it-has-been-a-crazy-surreal-last-few-weeks-randalstown-native-bruce-on-living-out-rugby-world-cup-dream-with-zimbabwe-MIUG7CPZGZAHDIGY4SPRR3TXEE/

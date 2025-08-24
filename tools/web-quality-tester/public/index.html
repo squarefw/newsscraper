@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Quality Tester - Web Interface</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1 class="title">
+                    <i class="fas fa-brain"></i>
+                    AI Quality Tester
+                </h1>
+                <p class="subtitle">Test and optimize AI translation & rewriting quality with real-time feedback</p>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Input Section -->
+            <section class="card input-section">
+                <h2 class="section-title">
+                    <i class="fas fa-link"></i>
+                    Content Input
+                </h2>
+                
+                <div class="input-group">
+                    <label for="url-input" class="label">新闻文章URL</label>
+                    <input 
+                        type="url" 
+                        id="url-input" 
+                        placeholder="https://example.com/news-article"
+                        class="input url-input"
+                    >
+                </div>
+
+                <div class="extracted-content" id="extracted-content" style="display: none;">
+                    <div class="content-preview">
+                        <h3>Extracted Content Preview</h3>
+                        <div class="preview-title" id="preview-title"></div>
+                        <div class="preview-content" id="preview-content"></div>
+                        <div class="content-stats" id="content-stats"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Configuration Section -->
+            <section class="card config-section">
+                <h2 class="section-title">
+                    <i class="fas fa-cogs"></i>
+                    AI Configuration
+                </h2>
+                
+                <div class="config-grid">
+                    <div class="config-item">
+                        <label for="translate-engine" class="label">翻译AI引擎</label>
+                        <select id="translate-engine" class="select">
+                            <option value="">选择翻译引擎...</option>
+                        </select>
+                    </div>
+                    
+                    <div class="config-item">
+                        <label for="rewrite-engine" class="label">重写AI引擎</label>
+                        <select id="rewrite-engine" class="select">
+                            <option value="">选择重写引擎...</option>
+                        </select>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Prompts Section -->
+            <section class="card prompts-section">
+                <h2 class="section-title">
+                    <i class="fas fa-edit"></i>
+                    AI Prompts
+                </h2>
+                
+                <div class="prompts-grid">
+                    <div class="prompt-item">
+                        <label for="translate-prompt" class="label">Translation Prompt</label>
+                        <textarea 
+                            id="translate-prompt" 
+                            class="textarea"
+                            rows="4"
+                            placeholder="Enter your translation prompt here..."
+                        ></textarea>
+                    </div>
+                    
+                    <div class="prompt-item">
+                        <label for="rewrite-prompt" class="label">Rewrite Prompt</label>
+                        <textarea 
+                            id="rewrite-prompt" 
+                            class="textarea"
+                            rows="4"
+                            placeholder="Enter your rewrite prompt here..."
+                        ></textarea>
+                    </div>
+                </div>
+                
+                                <div class="form-actions">
+                    <button id="process-btn" class="btn btn-primary" disabled>
+                        <i class="fas fa-play"></i>
+                        开始AI处理
+                    </button>
+                    <button id="translate-only-btn" class="btn btn-info" disabled>
+                        <i class="fas fa-language"></i>
+                        仅翻译
+                    </button>
+                    <button id="rewrite-only-btn" class="btn btn-warning" disabled>
+                        <i class="fas fa-edit"></i>
+                        仅重写
+                    </button>
+                    <button id="reset-btn" class="btn btn-secondary">
+                        <i class="fas fa-refresh"></i>
+                        重置
+                    </button>
+                </div>
+            </section>
+
+            <!-- Processing Status -->
+            <section class="card processing-section" id="processing-section" style="display: none;">
+                <h2 class="section-title">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    Processing Status
+                </h2>
+                
+                <div class="processing-status">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progress-fill"></div>
+                    </div>
+                    <div class="status-text" id="status-text">Initializing...</div>
+                </div>
+            </section>
+
+            <!-- Results Section -->
+            <section class="card results-section" id="results-section" style="display: none;">
+                <h2 class="section-title">
+                    <i class="fas fa-chart-line"></i>
+                    AI Processing Results
+                </h2>
+                
+                <div class="results-grid">
+                    <div class="result-item">
+                        <h3 class="result-title">
+                            <i class="fas fa-language"></i>
+                            Translation Result
+                        </h3>
+                        <div class="result-content" id="translation-result"></div>
+                        <div class="result-stats" id="translation-stats"></div>
+                    </div>
+                    
+                    <div class="result-item">
+                        <h3 class="result-title">
+                            <i class="fas fa-magic"></i>
+                            Rewrite Result
+                        </h3>
+                        <div class="result-content" id="rewrite-result"></div>
+                        <div class="result-stats" id="rewrite-stats"></div>
+                    </div>
+                </div>
+                
+                <div class="results-summary" id="results-summary"></div>
+                
+                <div class="results-actions">
+                    <button id="export-results" class="btn btn-info">
+                        <i class="fas fa-download"></i>
+                        Export Results
+                    </button>
+                    <button id="test-again" class="btn btn-primary">
+                        <i class="fas fa-redo"></i>
+                        Test Again
+                    </button>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>&copy; 2025 AI Quality Tester. Built for intelligent content optimization.</p>
+        </footer>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loading-overlay">
+        <div class="loading-spinner">
+            <i class="fas fa-cog fa-spin"></i>
+            <p>Processing with AI...</p>
+        </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <script src="script.js" defer></script>
+</body>
+</html>

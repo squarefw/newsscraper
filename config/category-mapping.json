@@ -1,0 +1,21 @@
+{
+  "customApiCategoryMapping": {
+    "科技": "4c19e28c-6eec-4fe2-8ecd-079620093426",
+    "政治": "cfcd49aa-bf03-4b18-8deb-a48ba92ff97a",
+    "经济": "e55ab84c-76c8-4811-9df8-6f44ef2bab9b",
+    "体育": "6f22716f-fcef-4b93-a0bc-31b07036a978",
+    "娱乐": "549c4ef3-4dea-4df2-89aa-8fcf86efd51c",
+    "健康": "549c4ef3-4dea-4df2-89aa-8fcf86efd51c",
+    "教育": "549c4ef3-4dea-4df2-89aa-8fcf86efd51c",
+    "环境": "549c4ef3-4dea-4df2-89aa-8fcf86efd51c",
+    "社会": "8b5d0794-91a5-4e53-94d6-05b7e82fdb9e",
+    "国际": "8b5d0794-91a5-4e53-94d6-05b7e82fdb9e",
+    "technology": "4c19e28c-6eec-4fe2-8ecd-079620093426",
+    "politics": "cfcd49aa-bf03-4b18-8deb-a48ba92ff97a",
+    "economy": "e55ab84c-76c8-4811-9df8-6f44ef2bab9b",
+    "sports": "6f22716f-fcef-4b93-a0bc-31b07036a978",
+    "culture": "549c4ef3-4dea-4df2-89aa-8fcf86efd51c",
+    "news": "8b5d0794-91a5-4e53-94d6-05b7e82fdb9e"
+  },
+  "defaultCategoryId": "550e8400-e29b-41d4-a716-446655440000"
+}
