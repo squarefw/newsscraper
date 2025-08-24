@@ -69,3 +69,8 @@ reports/*.csv
 
 # Test outputs
 test-output/
+
+# Browser cache and automation artifacts  
+.browser_cache/
+screenshots/
+*.har
