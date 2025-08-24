@@ -118,6 +118,10 @@ const extractNewsFromUrl = async (url) => {
     const $ = cheerio.load(response.data);
     let title = '';
     let content = '';
+    let imageUrl = null;
+
+    // 1. 优先从Meta标签提取图片
+    imageUrl = $('meta[property="og:image"]').attr('content') || $('meta[name="twitter:image"]').attr('content');
 
     // 尝试多种选择器提取标题
     const titleSelectors = [
@@ -141,22 +145,35 @@ const extractNewsFromUrl = async (url) => {
       '.article-body',
       '.content',
       '.post-content',
-      'article p',
-      '.entry-content p',
-      'main p'
+      'article',
+      '.entry-content',
+      'main'
     ];
-
+    
+    let $contentElement = null;
     for (const selector of contentSelectors) {
-      const paragraphs = $(selector);
-      if (paragraphs.length > 0) {
-        content = paragraphs.map((i, el) => $(el).text().trim()).get().join('\n\n');
-        if (content.length > 100) break;
+      const $el = $(selector);
+      if ($el.length > 0) {
+        $contentElement = $el.first();
+        const paragraphs = $contentElement.find('p');
+        if (paragraphs.length > 0) {
+            content = paragraphs.map((i, el) => $(el).text().trim()).get().join('\n\n');
+            if (content.length > 100) break;
+        }
+      }
+    }
+
+    // 2. 如果Meta标签没有图片，从内容中提取第一张
+    if (!imageUrl && $contentElement) {
+      const firstImg = $contentElement.find('img').first();
+      if (firstImg.length) {
+        imageUrl = firstImg.attr('src');
       }
     }
 
     // 如果没有找到合适的内容，尝试通用方法
     if (!content || content.length < 100) {
-      content = $('p').map((i, el) => $(el).text().trim()).get()
+      content = $('p').map((i, el) => $(el).text().trim())
         .filter(text => text.length > 20)
         .slice(0, 10)
         .join('\n\n');
@@ -170,8 +187,22 @@ const extractNewsFromUrl = async (url) => {
       throw new Error('无法提取有效的新闻内容');
     }
 
+    // 3. 确保图片URL是绝对路径
+    if (imageUrl) {
+      try {
+        const absoluteUrl = new URL(imageUrl, url).href;
+        imageUrl = absoluteUrl;
+        console.log(`   🖼️ 发现图片: ${imageUrl}`);
+      } catch (e) {
+        console.log(`   ⚠️ 无效的图片URL: ${imageUrl}`);
+        imageUrl = null;
+      }
+    } else {
+      console.log('   🟡 未找到合适的图片');
+    }
+
     console.log(`   ✅ 提取成功 - 标题: ${title.length}字符, 正文: ${content.length}字符`);
-    return { title, content };
+    return { title, content, imageUrl };
   } catch (error) {
     console.log(`   ❌ 提取失败: ${error.message}`);
     throw error;
@@ -198,7 +229,7 @@ const finalCleanContent = (content, type = 'content') => {
     /^改写结果.*?：/gim,
     /^重写结果.*?：/gim,
     /^—+\s*$/gm,  // 移除单独的破折号行
-    /^\s*—\s*$/gm  // 移除单独的破折号
+    /^\s*—\s*$/gm  // 秼除单独的破折号
   ];
 
   editingPatterns.forEach(pattern => {
@@ -225,7 +256,7 @@ const finalCleanContent = (content, type = 'content') => {
 };
 
 // 使用新WordPress连接器推送文章
-const pushToWordPressWithConnector = async (processedData, originalUrl, config, wpConnector) => {
+const pushToWordPressWithConnector = async (processedData, originalUrl, config, wpConnector, featuredMediaId = null) => {
   try {
     console.log(`📤 准备推送到WordPress: ${processedData.finalTitle || processedData.originalTitle}`);
     
@@ -251,7 +282,8 @@ const pushToWordPressWithConnector = async (processedData, originalUrl, config, 
       content: enhancedContent,
       status: config.wordpress.defaultStatus || 'draft',
       categories: processedData.categoryNames || [config.wordpress.defaultCategory || 'Technology'],
-      excerpt: processedData.summary || ''
+      excerpt: processedData.summary || '',
+      featuredMediaId: featuredMediaId  // 添加特色图片媒体ID
     };
 
     // 使用WordPress连接器发布文章
@@ -263,6 +295,21 @@ const pushToWordPressWithConnector = async (processedData, originalUrl, config, 
       console.log(`   🔗 文章链接: ${result.link}`);
       console.log(`   📝 状态: ${result.status}`);
       console.log(`   🔧 使用方法: ${result.method.toUpperCase()}`);
+      if (featuredMediaId) {
+        console.log(`   🖼️ 特色图片: 已设置 (媒体ID: ${featuredMediaId})`);
+        
+        // 验证特色图片设置
+        try {
+          const verification = await wordpressConnector.verifyFeaturedImage(result.postId);
+          if (verification.success && verification.hasImage) {
+            console.log(`   ✅ 特色图片验证成功`);
+          } else {
+            console.log(`   ⚠️  特色图片验证失败或未设置`);
+          }
+        } catch (error) {
+          console.log(`   ⚠️  特色图片验证出错: ${error.message}`);
+        }
+      }
       
       return {
         success: true,
@@ -410,9 +457,28 @@ async function main() {
           console.log(`   ❌ AI处理错误: ${aiError.message}`);
           throw new Error(`AI处理失败: ${aiError.message}`);
         }
+
+        // 图片上传处理
+        let featuredMediaId = null;
+        if (originalContent.imageUrl) {
+          console.log('🖼️ 开始处理特色图片...');
+          try {
+            const uploadResult = await wpConnector.uploadImageFromUrl(originalContent.imageUrl);
+            if (uploadResult.success) {
+              featuredMediaId = uploadResult.mediaId;
+              console.log(`   ✅ 特色图片设置成功，媒体ID: ${featuredMediaId}`);
+            } else {
+              console.log(`   ⚠️ 图片上传失败: ${uploadResult.error}`);
+            }
+          } catch (imageError) {
+            console.log(`   ⚠️ 图片处理出错: ${imageError.message}`);
+          }
+        } else {
+          console.log('   🟡 本文无特色图片');
+        }
         
         // 使用新WordPress连接器推送
-        const pushResult = await pushToWordPressWithConnector(aiProcessResult, url, config, wpConnector);
+        const pushResult = await pushToWordPressWithConnector(aiProcessResult, url, config, wpConnector, featuredMediaId);
         
         const urlDuration = Date.now() - urlStartTime;
         

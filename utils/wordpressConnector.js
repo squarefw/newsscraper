@@ -149,6 +149,178 @@ class WordPressConnector {
   }
 
   /**
+   * 从URL上传图片到WordPress媒体库
+   */
+  async uploadImageFromUrl(imageUrl) {
+    if (!this.preferredMethod) {
+      await this.detectBestMethod();
+    }
+
+    console.log(`📥 正在上传图片到WordPress: ${imageUrl}`);
+
+    try {
+      // 首先下载图片
+      const imageData = await this.downloadImage(imageUrl);
+      
+      if (this.preferredMethod === 'rest') {
+        return await this.uploadImageRest(imageData);
+      } else {
+        return await this.uploadImageXMLRPC(imageData);
+      }
+    } catch (error) {
+      console.log(`   ❌ 图片上传失败: ${error.message}`);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * 下载图片数据
+   */
+  async downloadImage(imageUrl) {
+    return new Promise((resolve, reject) => {
+      const url = new URL(imageUrl);
+      const client = url.protocol === 'https:' ? https : http;
+      
+      const req = client.request({
+        hostname: url.hostname,
+        port: url.port || (url.protocol === 'https:' ? 443 : 80),
+        path: url.pathname + url.search,
+        method: 'GET',
+        headers: {
+          'User-Agent': 'WordPress-Connector/1.0'
+        },
+        timeout: 30000
+      }, (res) => {
+        if (res.statusCode !== 200) {
+          reject(new Error(`HTTP ${res.statusCode}: ${res.statusMessage}`));
+          return;
+        }
+
+        const chunks = [];
+        res.on('data', chunk => chunks.push(chunk));
+        res.on('end', () => {
+          const imageBuffer = Buffer.concat(chunks);
+          const contentType = res.headers['content-type'] || 'image/jpeg';
+          
+          // 从URL提取文件名并规范化
+          let filename = url.pathname.split('/').pop() || 'image';
+          
+          // 移除无效字符，限制长度
+          filename = filename.replace(/[^a-zA-Z0-9.-]/g, '_').substring(0, 50);
+          
+          // 确保有正确的扩展名
+          if (!filename.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+            const extension = contentType.includes('jpeg') ? '.jpg' : 
+                            contentType.includes('png') ? '.png' :
+                            contentType.includes('gif') ? '.gif' :
+                            contentType.includes('webp') ? '.webp' : '.jpg';
+            filename += extension;
+          }
+          
+          // 确保文件名不为空且不以点开头
+          if (!filename || filename.startsWith('.')) {
+            filename = 'featured_image.jpg';
+          }
+          
+          console.log(`   🔍 图片信息: ${filename} (${contentType}, ${Math.round(imageBuffer.length/1024)}KB)`);
+          
+          resolve({
+            buffer: imageBuffer,
+            contentType,
+            filename
+          });
+        });
+      });
+      
+      req.on('error', reject);
+      req.on('timeout', () => {
+        req.destroy();
+        reject(new Error('下载图片超时'));
+      });
+      
+      req.end();
+    });
+  }
+
+  /**
+   * 通过REST API上传图片
+   */
+  async uploadImageRest(imageData) {
+    try {
+      const boundary = '----WebKitFormBoundary' + Math.random().toString(36).substring(2);
+      const body = Buffer.concat([
+        Buffer.from(`--${boundary}\r\n`),
+        Buffer.from(`Content-Disposition: form-data; name="file"; filename="${imageData.filename}"\r\n`),
+        Buffer.from(`Content-Type: ${imageData.contentType}\r\n\r\n`),
+        imageData.buffer,
+        Buffer.from(`\r\n--${boundary}--\r\n`)
+      ]);
+
+      const result = await this.makeRestRequest('media', 'POST', body, {
+        'Content-Type': `multipart/form-data; boundary=${boundary}`
+      });
+      
+      if (result.statusCode === 201) {
+        const media = JSON.parse(result.data);
+        console.log(`   ✅ 图片上传成功，媒体ID: ${media.id}`);
+        console.log(`   🔗 图片URL: ${media.source_url || media.guid?.rendered || '未知'}`);
+        return {
+          success: true,
+          mediaId: media.id,
+          url: media.source_url,
+          method: 'rest'
+        };
+      }
+      throw new Error(`REST API上传失败: ${result.statusCode}`);
+    } catch (error) {
+      console.warn('REST API上传失败，尝试XML-RPC:', error.message);
+      return this.uploadImageXMLRPC(imageData);
+    }
+  }
+
+  /**
+   * 通过XML-RPC上传图片
+   */
+  async uploadImageXMLRPC(imageData) {
+    try {
+      const base64Data = imageData.buffer.toString('base64');
+      
+      const result = await this.xmlrpcCall('wp.uploadFile', [
+        1, // blog_id
+        this.config.username,
+        this.config.password,
+        {
+          name: imageData.filename,
+          type: imageData.contentType,
+          bits: { __xmlrpc_base64: base64Data } // 特殊标记为base64数据
+        }
+      ]);
+
+      if (result.statusCode === 200 && !result.data.includes('faultCode')) {
+        // 解析XML-RPC响应获取媒体ID
+        const idMatch = result.data.match(/<name>id<\/name><value><string>(\d+)<\/string>/);
+        const urlMatch = result.data.match(/<name>url<\/name><value><string>([^<]+)<\/string>/);
+        
+        if (idMatch && urlMatch) {
+          const mediaId = parseInt(idMatch[1]);
+          const mediaUrl = urlMatch[1];
+          console.log(`   ✅ 图片上传成功，媒体ID: ${mediaId}`);
+          console.log(`   🔗 图片URL: ${mediaUrl}`);
+          return {
+            success: true,
+            mediaId,
+            url: mediaUrl,
+            method: 'xmlrpc'
+          };
+        }
+      }
+      throw new Error('XML-RPC上传失败');
+    } catch (error) {
+      throw new Error(`上传图片失败: ${error.message}`);
+    }
+  }
+
+  /**
    * 发布文章
    */
   async publishPost(postData) {
@@ -173,7 +345,8 @@ class WordPressConnector {
         content: postData.content,
         status: postData.status || 'draft',
         categories: postData.categories || [],
-        excerpt: postData.excerpt || ''
+        excerpt: postData.excerpt || '',
+        featured_media: postData.featuredMediaId || 0
       });
 
       const result = await this.makeRestRequest('posts', 'POST', body);
@@ -214,6 +387,11 @@ class WordPressConnector {
         };
       }
 
+      // 如果有特色图片，添加到文章数据中
+      if (postData.featuredMediaId) {
+        xmlrpcPost.post_thumbnail = postData.featuredMediaId;
+      }
+
       const result = await this.xmlrpcCall('wp.newPost', [
         1, // blog_id
         this.config.username,
@@ -242,28 +420,35 @@ class WordPressConnector {
   /**
    * 发起REST API请求
    */
-  async makeRestRequest(endpoint, method = 'GET', body = null) {
+  async makeRestRequest(endpoint, method = 'GET', body = null, customHeaders = {}) {
     return new Promise((resolve, reject) => {
       const url = new URL(`${this.config.baseUrl}/wp-json/wp/v2/${endpoint}`);
       const client = url.protocol === 'https:' ? https : http;
       
       const authHeader = 'Basic ' + Buffer.from(`${this.config.username}:${this.config.password}`).toString('base64');
       
+      const headers = {
+        'Authorization': authHeader,
+        'User-Agent': 'WordPress-Connector/1.0',
+        ...customHeaders
+      };
+
+      // 只有当不是multipart/form-data时才设置Content-Type为application/json
+      if (!headers['Content-Type']) {
+        headers['Content-Type'] = 'application/json';
+      }
+      
       const options = {
         hostname: url.hostname,
         port: url.port || (url.protocol === 'https:' ? 443 : 80),
         path: url.pathname + url.search,
         method,
-        headers: {
-          'Authorization': authHeader,
-          'Content-Type': 'application/json',
-          'User-Agent': 'WordPress-Connector/1.0'
-        },
+        headers,
         timeout: 15000
       };
       
       if (body) {
-        options.headers['Content-Length'] = Buffer.byteLength(body);
+        headers['Content-Length'] = Buffer.byteLength(body);
       }
       
       const req = client.request(options, (res) => {
@@ -346,6 +531,10 @@ class WordPressConnector {
     } else if (Array.isArray(param)) {
       return `<array><data>${param.map(item => `<value>${this.formatXMLParam(item)}</value>`).join('')}</data></array>`;
     } else if (typeof param === 'object') {
+      // 检查是否是base64数据标记
+      if (param && param.__xmlrpc_base64) {
+        return `<base64>${param.__xmlrpc_base64}</base64>`;
+      }
       const members = Object.entries(param).map(([key, value]) => 
         `<member><name>${this.escapeXml(key)}</name><value>${this.formatXMLParam(value)}</value></member>`
       ).join('');
@@ -395,6 +584,50 @@ class WordPressConnector {
     }
     
     return categories;
+  }
+
+  /**
+   * 验证文章的特色图片设置
+   */
+  async verifyFeaturedImage(postId) {
+    try {
+      if (this.preferredMethod === 'rest') {
+        const result = await this.makeRestRequest(`/wp/v2/posts/${postId}`, 'GET');
+        if (result.success) {
+          const post = JSON.parse(result.data);
+          return {
+            success: true,
+            featuredMediaId: post.featured_media,
+            hasImage: post.featured_media > 0
+          };
+        }
+      } else {
+        // 使用 XML-RPC 获取文章信息
+        const xmlContent = this.buildXMLRequest('wp.getPost', [
+          this.config.wordpress.username,
+          this.config.wordpress.password,
+          postId
+        ]);
+        
+        const result = await this.makeRequest('/xmlrpc.php', 'POST', xmlContent, {
+          'Content-Type': 'text/xml'
+        });
+        
+        if (result.statusCode === 200) {
+          // 简单检查响应中是否包含 featured_image
+          const hasImage = result.data.includes('<name>featured_image</name>');
+          return {
+            success: true,
+            hasImage,
+            method: 'xmlrpc'
+          };
+        }
+      }
+      return { success: false };
+    } catch (error) {
+      console.warn('验证特色图片失败:', error.message);
+      return { success: false, error: error.message };
+    }
   }
 }
 
