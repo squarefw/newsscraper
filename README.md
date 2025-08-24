@@ -1,5 +1,9 @@
 # News Scraper - Production System
 
+[![GitHub](https://img.shields.io/badge/GitHub-squarefw%2Fnewsscraper-blue?logo=github)](https://github.com/squarefw/newsscraper)
+[![Security](https://img.shields.io/badge/Security-API%20Keys%20Protected-green?logo=shield)](docs/API_KEYS_SETUP.md)
+[![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
+
 简化的生产环境新闻发现和AI处理系统。
 
 ## 快速开始
