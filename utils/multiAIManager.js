@@ -285,14 +285,23 @@ class MultiAIManager {
       /^以下是.*?翻译.*?：/gim,
       /^翻译结果.*?：/gim,
       /^改写结果.*?：/gim,
-      /^重写结果.*?：/gim
+      /^重写结果.*?：/gim,
+      /^新闻重写如下.*?：?/gim,
+      /^新闻翻译如下.*?：?/gim,
+      /^新闻内容如下.*?：?/gim,
+      /^重写内容如下.*?：?/gim,
+      /^翻译内容如下.*?：?/gim,
+      /^以下是重写的.*?：?/gim,
+      /^以下是翻译的.*?：?/gim,
+      /^重写.*?：$/gim,
+      /^翻译.*?：$/gim
     ];
     
     editingPatterns.forEach(pattern => {
       cleaned = cleaned.replace(pattern, '');
     });
 
-    // 新增：移除Markdown格式
+    // 移除Markdown格式
     // 1. 移除标题标记 (e.g., ### Title -> Title)
     cleaned = cleaned.replace(/^(#+)\s*/gm, '');
     

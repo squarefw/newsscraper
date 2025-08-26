@@ -38,8 +38,8 @@
       "extract_keywords": "siliconflow",
       "categorize": "siliconflow",
       "sentiment": "siliconflow",
-      "custom_title_translate": "siliconflow",
-      "custom_title_generate": "siliconflow",
+      "custom_title_translate": "qwen",
+      "custom_title_generate": "qwen",
       "article_filter": "qwen",
       "deduplication": "qwen"
     },

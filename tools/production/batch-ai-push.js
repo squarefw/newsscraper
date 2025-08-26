@@ -202,6 +202,8 @@ const extractNewsFromUrl = async (url) => {
     }
 
     console.log(`   ✅ 提取成功 - 标题: ${title.length}字符, 正文: ${content.length}字符`);
+    console.log(`   📋 标题内容: "${title}"`);
+    console.log(`   📋 正文开头: "${content.substring(0, 200)}..."`);
     return { title, content, imageUrl };
   } catch (error) {
     console.log(`   ❌ 提取失败: ${error.message}`);
@@ -281,10 +283,12 @@ const pushToWordPressWithConnector = async (processedData, originalUrl, config, 
       title: cleanTitle,
       content: enhancedContent,
       status: config.wordpress.defaultStatus || 'draft',
-      categories: processedData.categoryNames || [config.wordpress.defaultCategory || 'Technology'],
+      categories: processedData.categoryId ? [processedData.categoryId] : [config.wordpress.defaultCategory || 'Technology'],
       excerpt: processedData.summary || '',
       featuredMediaId: featuredMediaId  // 添加特色图片媒体ID
     };
+
+    console.log(`   📂 分类设置: categoryId=${processedData.categoryId}, categories=${JSON.stringify(postData.categories)}`);
 
     // 使用WordPress连接器发布文章
     const result = await wpConnector.publishPost(postData);
@@ -396,7 +400,12 @@ async function main() {
     // 获取WordPress分类列表（用于AI分类选择）
     console.log('📂 获取WordPress分类列表...');
     const wpCategories = await wpConnector.getCategories();
-    console.log(`✅ 获取到 ${wpCategories.length} 个分类: ${wpCategories.map(c => c.name).slice(0, 5).join(', ')}${wpCategories.length > 5 ? '...' : ''}\n`);
+    console.log(`✅ 获取到 ${wpCategories.length} 个分类: ${wpCategories.map(c => c.name).slice(0, 5).join(', ')}${wpCategories.length > 5 ? '...' : ''}`);
+    console.log('📋 完整分类列表:');
+    wpCategories.forEach(cat => {
+      console.log(`   - ${cat.name} (ID: ${cat.id})`);
+    });
+    console.log('');
 
     // 读取URL列表
     const urls = readUrlsFromFile(urlFile);
@@ -428,28 +437,14 @@ async function main() {
         console.log('🤖 开始AI处理...');
         
         try {
-          if (aiProcessor.processNewsWithDynamicCategories) {
-            // 使用动态分类版本
-            console.log('   使用动态分类处理器');
-            aiProcessResult = await aiProcessor.processNewsWithDynamicCategories(
-              multiAIManager, 
-              originalContent, 
-              config.ai.tasks || ['translate', 'rewrite', 'categorize'], 
-              config
-            );
-          } else if (aiProcessor.processNewsWithAI) {
-            // 使用标准版本
-            console.log('   使用标准AI处理器');
-            aiProcessResult = await aiProcessor.processNewsWithAI(
-              multiAIManager,
-              originalContent,
-              config.ai.tasks || ['translate', 'rewrite', 'categorize'],
-              wpCategories, // 传入WordPress分类
-              config
-            );
-          } else {
-            throw new Error('AI处理器方法不可用');
-          }
+          console.log('   使用AI处理器（含WordPress分类约束）');
+          aiProcessResult = await aiProcessor.processNewsWithAI(
+            multiAIManager, 
+            originalContent, 
+            config.ai.tasks || ['translate', 'rewrite', 'categorize'], 
+            wpCategories, // 使用已经获取的WordPress分类
+            config
+          );
           
           console.log('   ✅ AI处理完成');
           

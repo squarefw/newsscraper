@@ -108,7 +108,7 @@ class WordPressConnector {
    */
   async getCategoriesRest() {
     try {
-      const result = await this.makeRestRequest('categories?per_page=100');
+      const result = await this.makeRestRequest('categories?per_page=100', 'GET');
       if (result.statusCode === 200) {
         const categories = JSON.parse(result.data);
         return categories.map(cat => ({
@@ -382,9 +382,18 @@ class WordPressConnector {
 
       // 如果有分类，添加到文章数据中
       if (postData.categories && postData.categories.length > 0) {
-        xmlrpcPost.terms_names = {
-          category: postData.categories
-        };
+        // 检查categories是ID还是名称
+        if (typeof postData.categories[0] === 'number') {
+          // 如果是数字，设置为分类ID
+          xmlrpcPost.terms = {
+            category: postData.categories
+          };
+        } else {
+          // 如果是字符串，设置为分类名称
+          xmlrpcPost.terms_names = {
+            category: postData.categories
+          };
+        }
       }
 
       // 如果有特色图片，添加到文章数据中

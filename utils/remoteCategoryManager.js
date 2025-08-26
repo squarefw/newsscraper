@@ -88,8 +88,10 @@ const getCustomApiCategories = async (apiConfig) => {
 
 /**
  * 获取WordPress分类信息
+ * @param {Object} wpConfig - WordPress配置
+ * @param {Function} [categoryFetcher] - 可选的分类获取函数
  */
-const getWordPressCategories = async (wpConfig) => {
+const getWordPressCategories = async (wpConfig, categoryFetcher = null) => {
   if (!wpConfig?.baseUrl) {
     throw new Error('WordPress配置不完整');
   }
@@ -106,34 +108,33 @@ const getWordPressCategories = async (wpConfig) => {
   try {
     console.log(`📡 获取WordPress分类信息: ${wpConfig.baseUrl}`);
     
-    const auth = wpConfig.username && wpConfig.password ? 
-      { username: wpConfig.username, password: wpConfig.password } : {};
-
-    const response = await axios.get(`${wpConfig.baseUrl}/wp-json/wp/v2/categories`, {
-      auth: Object.keys(auth).length > 0 ? auth : undefined,
-      params: {
-        per_page: 100, // 获取更多分类
-        hide_empty: false
-      },
-      timeout: 10000
-    });
-
-    const categories = response.data.map(cat => ({
-      id: cat.id,
-      name: cat.name,
-      slug: cat.slug,
-      description: cat.description || '',
-      count: cat.count || 0,
-      parent: cat.parent || 0
-    }));
+    let categories = [];
+    
+    // 如果提供了自定义的分类获取函数，优先使用
+    if (categoryFetcher && typeof categoryFetcher === 'function') {
+      try {
+        console.log(`   📎 使用自定义WordPress连接器获取分类`);
+        categories = await categoryFetcher();
+        console.log(`✅ 通过自定义连接器获取到 ${categories.length} 个WordPress分类`);
+      } catch (error) {
+        console.warn(`⚠️  自定义连接器获取分类失败: ${error.message}，尝试直接REST API`);
+        // 如果自定义连接器失败，回退到直接REST API调用
+        categories = await getWordPressCategoriesDirect(wpConfig);
+      }
+    } else {
+      console.log(`   🔌 未提供自定义连接器，使用直接REST API调用`);
+      // 使用直接REST API调用
+      categories = await getWordPressCategoriesDirect(wpConfig);
+    }
 
     // 缓存结果
-    categoryCache.set(cacheKey, {
-      data: categories,
-      timestamp: Date.now()
-    });
+    if (categories.length > 0) {
+      categoryCache.set(cacheKey, {
+        data: categories,
+        timestamp: Date.now()
+      });
+    }
 
-    console.log(`✅ 获取到 ${categories.length} 个WordPress分类`);
     return categories;
 
   } catch (error) {
@@ -143,9 +144,40 @@ const getWordPressCategories = async (wpConfig) => {
 };
 
 /**
- * 统一获取所有分类信息
+ * 直接通过REST API获取WordPress分类信息
  */
-const getAllCategories = async (config) => {
+const getWordPressCategoriesDirect = async (wpConfig) => {
+  const auth = wpConfig.username && wpConfig.password ? 
+    { username: wpConfig.username, password: wpConfig.password } : {};
+
+  const response = await axios.get(`${wpConfig.baseUrl}/wp-json/wp/v2/categories`, {
+    auth: Object.keys(auth).length > 0 ? auth : undefined,
+    params: {
+      per_page: 100, // 获取更多分类
+      hide_empty: false
+    },
+    timeout: 10000
+  });
+
+  const categories = response.data.map(cat => ({
+    id: cat.id,
+    name: cat.name,
+    slug: cat.slug,
+    description: cat.description || '',
+    count: cat.count || 0,
+    parent: cat.parent || 0
+  }));
+
+  console.log(`✅ 获取到 ${categories.length} 个WordPress分类`);
+  return categories;
+};
+
+/**
+ * 统一获取所有分类信息
+ * @param {Object} config - 配置对象
+ * @param {Function} [wordpressCategoryFetcher] - WordPress分类获取函数
+ */
+const getAllCategories = async (config, wordpressCategoryFetcher = null) => {
   const result = {
     customApi: {},
     wordpress: [],
@@ -164,7 +196,7 @@ const getAllCategories = async (config) => {
   // 获取WordPress分类
   if (config.wordpress?.enabled && config.wordpress?.baseUrl) {
     try {
-      result.wordpress = await getWordPressCategories(config.wordpress);
+      result.wordpress = await getWordPressCategories(config.wordpress, wordpressCategoryFetcher);
     } catch (error) {
       result.errors.push(`WordPress分类获取失败: ${error.message}`);
     }

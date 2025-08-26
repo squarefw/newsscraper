@@ -8,49 +8,118 @@ const { getAllCategories } = require('./remoteCategoryManager');
 const { MultiAIManager } = require('./multiAIManager');
 
 /**
- * 评估标题质量 - 检查标题是否符合新闻标题标准
+ * 评估标题质量
+ * @param {string} title - 待评估的标题
+ * @param {string} content - 新闻正文内容（用于关键信息对比）
+ * @returns {object} 包含质量分数和具体问题的对象
  */
 const evaluateTitleQuality = (title, content = '') => {
   if (!title || typeof title !== 'string') {
-    return { score: 0, issues: ['标题为空'], isGood: false, needsRegeneration: true };
+    return { score: 0, issues: ['标题为空'] };
   }
   
   const trimmedTitle = title.trim();
   const issues = [];
-  let score = 100;
+  let score = 100; // 满分100，发现问题则扣分
   
-  // 检查抽象开头（严重问题）
-  const abstractStarters = ['根据', '关于', '基于', '针对', '按照', '依照', '为了', '由于'];
-  if (abstractStarters.some(starter => trimmedTitle.startsWith(starter))) {
-    issues.push('标题以抽象词语开头');
-    score -= 50; // 严重扣分
-  }
-  
-  // 检查长度
+  // 1. 长度检查
   if (trimmedTitle.length < 5) {
-    issues.push('标题过短');
+    issues.push('标题过短（少于5字符）');
     score -= 30;
-  } else if (trimmedTitle.length > 30) {
-    issues.push('标题过长');
+  } else if (trimmedTitle.length   getCategoryId,
+  evaluateTitleQuality, // 导出标题质量检查函数
+  regenerateTitle, // 导出标题重新生成函数
+  extractTitleAndContent // 导出标题内容提取函数
+};) {
+    issues.push('标题过长（超过30字符）');
     score -= 20;
   }
   
-  // 检查是否包含具体信息
-  const hasSpecificInfo = /[A-Za-z\u4e00-\u9fff]{2,}/.test(trimmedTitle) && 
-                         (/(发布|推出|签署|宣布|召开|举行|启动|完成|获得|达成|诉讼|抗议|游行)/.test(trimmedTitle) ||
-                          /(公司|集团|政府|法院|学校|医院)/.test(trimmedTitle));
+  // 2. 抽象开头检查（严重扣分）
+  const abstractStarters = ['根据', '关于', '基于', '针对', '按照', '依照', '为了', '由于', '通过', '在', '对于'];
+  if (abstractStarters.some(starter => trimmedTitle.startsWith(starter))) {
+    issues.push('标题以抽象词语开头');
+    score -= 40; // 严重扣分
+  }
   
-  if (!hasSpecificInfo) {
-    issues.push('缺乏具体信息');
+  // 3. 具体性检查（是否包含实体）
+  const hasPersonName = /[A-Za-z\u4e00-\u9fff]{2,}/.test(trimmedTitle); // 简单的姓名检测
+  const hasPlace = /(市|县|区|州|省|国|镇|村|路|街|公园|广场|大学|医院|公司|集团)/.test(trimmedTitle);
+  const hasSpecificEvent = /(发布|推出|签署|宣布|召开|举行|启动|完成|获得|达成|收购|合并|诉讼|抗议|游行|比赛|会议|论坛|节|日)/.test(trimmedTitle);
+  
+  if (!hasPersonName && !hasPlace && !hasSpecificEvent) {
+    issues.push('标题缺乏具体信息（无人名、地名或具体事件）');
     score -= 25;
+  }
+  
+  // 4. 新闻价值检查
+  const newsKeywords = ['新', '首次', '最新', '重要', '突破', '成功', '失败', '增长', '下降', '发现', '调查', '报告'];
+  const hasNewsValue = newsKeywords.some(keyword => trimmedTitle.includes(keyword)) || hasSpecificEvent;
+  
+  if (!hasNewsValue) {
+    issues.push('标题缺乏新闻价值');
+    score -= 15;
+  }
+  
+  // 5. 格式检查
+  if (trimmedTitle.includes('：') && trimmedTitle.split('：').length > 2) {
+    issues.push('标题格式复杂（多个冒号）');
+    score -= 10;
+  }
+  
+  // 6. 与内容相关性检查（如果提供了内容）
+  if (content && content.length > 50) {
+    // 提取内容中的关键词
+    const contentKeywords = content.match(/[\u4e00-\u9fff\w]{2,}/g) || [];
+    const titleKeywords = trimmedTitle.match(/[\u4e00-\u9fff\w]{2,}/g) || [];
+    
+    // 计算重叠度
+    const commonWords = titleKeywords.filter(word => 
+      contentKeywords.some(cWord => cWord.includes(word) || word.includes(cWord))
+    );
+    
+    if (commonWords.length === 0) {
+      issues.push('标题与正文关联度低');
+      score -= 20;
+    }
   }
   
   return {
     score: Math.max(0, score),
-    issues,
+    issues: issues,
     isGood: score >= 70,
     needsRegeneration: score < 50
   };
+};
+
+/**
+ * 智能重新生成标题
+ * @param {string} content - 新闻内容
+ * @param {object} multiAI - MultiAI管理器实例
+ * @returns {Promise<string|null>} 重新生成的标题或null
+ */
+const regenerateTitle = async (content, multiAI) => {
+  if (!content || !multiAI) {
+    return null;
+  }
+  
+  try {
+    console.log('    🔄 检测到标题质量不佳，重新生成...');
+    
+    // 使用专门的标题生成任务
+    const titleResult = await multiAI.processTask('custom_title_generate', content);
+    
+    if (titleResult && titleResult.trim()) {
+      const newTitle = titleResult.trim().split('\n')[0]; // 取第一行
+      console.log(`    ✅ 重新生成标题: ${newTitle}`);
+      return newTitle;
+    }
+    
+    return null;
+  } catch (error) {
+    console.log(`    ❌ 标题重新生成失败: ${error.message}`);
+    return null;
+  }
 };
 
 /**
@@ -184,27 +253,6 @@ const extractTitleAndContent = (aiResult) => {
 };
 
 /**
- * 智能重新生成标题
- */
-const regenerateTitle = async (content, multiAI) => {
-  if (!content || !multiAI) return null;
-  
-  try {
-    console.log('    🔄 重新生成标题...');
-    const result = await multiAI.processTask('custom_title_generate', content);
-    if (result && result.trim()) {
-      const newTitle = result.trim().split('\n')[0];
-      console.log(`    ✅ 新标题: ${newTitle}`);
-      return newTitle;
-    }
-    return null;
-  } catch (error) {
-    console.log(`    ❌ 标题生成失败: ${error.message}`);
-    return null;
-  }
-};
-
-/**
  * 获取任务中文名称
  */
 const getTaskName = (task) => {
@@ -319,6 +367,7 @@ const processNewsWithAI = async (multiAIManager, originalContent, tasks, wpCateg
   const results = [];
   let processedTitle = originalContent.title;
   let processedContent = originalContent.content;
+  let titleExtracted = false; // 标记是否已从内容中提取标题
   let keywords = '';
   let category = '';
   let sentiment = '';
@@ -336,46 +385,8 @@ const processNewsWithAI = async (multiAIManager, originalContent, tasks, wpCateg
     console.log(`   ${task} -> ${engine}`);
   }
   
-  // 首先处理标题翻译/重写
-  if (tasks.includes('translate') || tasks.includes('rewrite')) {
-    console.log(`   📝 首先处理标题优化...`);
-    
-    try {
-      let titleResult;
-      let titleAI;
-      
-      if (tasks.includes('translate') && processedTitle.match(/[a-zA-Z]/)) {
-        // 如果包含英文字符，使用指定的标题翻译AI
-        titleAI = multiAIManager.getAgentForTask('custom_title_translate');
-        titleResult = await titleAI.processContent(processedTitle, 'custom_title_translate');
-      } else {
-        // 否则使用指定的标题生成AI
-        titleAI = multiAIManager.getAgentForTask('custom_title_generate');
-        titleResult = await titleAI.processContent(processedContent.substring(0, 500), 'custom_title_generate');
-      }
-      
-      const newTitle = titleResult.trim().split('\n')[0]; // 取第一行
-      
-      if (newTitle && newTitle.length <= 50) {
-        processedTitle = newTitle;
-        console.log(`     ✅ 标题优化完成: ${processedTitle} [${titleAI.name}]`);
-        
-        results.push({
-          task: 'title_optimization',
-          taskName: '标题优化',
-          aiEngine: titleAI.name,
-          input: originalContent.title,
-          output: processedTitle,
-          duration: 0,
-          success: true
-        });
-      } else {
-        console.log(`     ⚠️ 标题长度不符合要求 (${newTitle ? newTitle.length : 0}字符)，使用原标题`);
-      }
-    } catch (error) {
-      console.log(`     ⚠️ 标题优化失败: ${error.message}，使用原标题`);
-    }
-  }
+  // 标题将在内容翻译/重写后从处理结果中提取
+  console.log(`   📝 将在内容处理后从结果中提取标题...`);
   
   for (let i = 0; i < tasks.length; i++) {
     const task = tasks[i];
@@ -392,12 +403,12 @@ const processNewsWithAI = async (multiAIManager, originalContent, tasks, wpCateg
 
       switch (task) {
         case 'translate':
-          // 翻译整个内容（包括标题），然后智能提取
-          inputContent = `${processedTitle}\n\n${processedContent}`;
+          // 只翻译内容，标题将从翻译结果中提取
+          inputContent = processedContent;
           break;
         case 'rewrite':
-          // 重写整个内容（包括标题），然后智能提取
-          inputContent = `${processedTitle}\n\n${processedContent}`;
+          // 只重写内容，标题将从重写结果中提取
+          inputContent = processedContent;
           break;
         case 'summarize':
           inputContent = processedContent;
@@ -428,13 +439,12 @@ const processNewsWithAI = async (multiAIManager, originalContent, tasks, wpCateg
       
       console.log(`     ✅ 完成 (${duration}ms) - 输出: ${result.length}字符 [${aiAgent.name}]`);
       
-      // 智能处理translate和rewrite的结果
+      // 更新处理后的内容用于下一个任务
       if (task === 'translate' || task === 'rewrite') {
+        // 智能标题和正文分离
         const { title: extractedTitle, content: extractedContent } = extractTitleAndContent(result);
         
         if (extractedTitle) {
-          console.log(`     📝 从${getTaskName(task)}结果中提取标题: ${extractedTitle}`);
-          
           // 检查标题质量
           const qualityCheck = evaluateTitleQuality(extractedTitle, extractedContent);
           console.log(`     🔍 标题质量评估: ${qualityCheck.score}分 ${qualityCheck.isGood ? '✅' : '⚠️'}`);
@@ -444,37 +454,65 @@ const processNewsWithAI = async (multiAIManager, originalContent, tasks, wpCateg
           }
           
           // 如果标题质量极差，尝试重新生成
-          let finalTitle = extractedTitle;
           if (qualityCheck.needsRegeneration) {
             const regeneratedTitle = await regenerateTitle(extractedContent, multiAIManager);
             if (regeneratedTitle) {
-              finalTitle = regeneratedTitle;
-              const newQualityCheck = evaluateTitleQuality(finalTitle, extractedContent);
+              extractedTitle = regeneratedTitle;
+              const newQualityCheck = evaluateTitleQuality(extractedTitle, extractedContent);
               console.log(`     🔄 重新生成后质量: ${newQualityCheck.score}分 ${newQualityCheck.isGood ? '✅' : '⚠️'}`);
             }
           }
           
           // 任务优先级：rewrite > translate
-          const shouldReplaceTitle = task === 'rewrite' || !processedTitle || processedTitle === originalContent.title;
+          const taskPriority = { 'rewrite': 2, 'translate': 1 };
+          const currentPriority = taskPriority[task] || 0;
           
-          if (shouldReplaceTitle) {
-            processedTitle = finalTitle;
-            console.log(`     ✅ 更新标题: ${processedTitle} (${task === 'rewrite' ? '重写优先' : '首次提取'})`);
-          } else {
-            // 比较质量，如果新标题明显更好，则替换
-            const currentQuality = evaluateTitleQuality(processedTitle, extractedContent);
-            const newQuality = evaluateTitleQuality(finalTitle, extractedContent);
+          if (!titleExtracted) {
+            // 首次提取标题
+            processedTitle = extractedTitle;
+            titleExtracted = true;
+            console.log(`     ✅ 从${getTaskName(task)}结果中提取标题: ${processedTitle}`);
             
-            if (newQuality.score > currentQuality.score + 20) {
-              processedTitle = finalTitle;
-              console.log(`     ✅ 替换标题: ${processedTitle} (质量提升${newQuality.score - currentQuality.score}分)`);
+            results.push({
+              task: 'title_extraction',
+              taskName: '标题提取',
+              aiEngine: aiAgent.name,
+              input: `从${getTaskName(task)}结果提取`,
+              output: processedTitle,
+              duration: 0,
+              success: true
+            });
+          } else {
+            // 已有标题，判断是否需要替换
+            let shouldReplace = false;
+            let replaceReason = '';
+            
+            // 条件1：重写任务的标题优先级更高
+            if (task === 'rewrite') {
+              shouldReplace = true;
+              replaceReason = '重写任务优先级更高';
+            }
+            // 条件2：新标题质量明显更好
+            else {
+              const currentQuality = evaluateTitleQuality(processedTitle, extractedContent);
+              const newQuality = evaluateTitleQuality(extractedTitle, extractedContent);
+              
+              if (newQuality.score > currentQuality.score + 20) { // 新标题明显更好
+                shouldReplace = true;
+                replaceReason = `新标题质量更好 (${newQuality.score}分 vs ${currentQuality.score}分)`;
+              }
+            }
+            
+            if (shouldReplace) {
+              processedTitle = extractedTitle;
+              console.log(`     ✅ 替换标题: ${processedTitle} (${replaceReason})`);
             } else {
               console.log(`     ➡️ 保留现有标题: ${processedTitle}`);
             }
           }
         }
         
-        // 更新内容
+        // 更新正文内容（已去除标题）
         processedContent = extractedContent || result;
       }
       
@@ -551,6 +589,7 @@ const processNewsWithAI = async (multiAIManager, originalContent, tasks, wpCateg
     }
   }
   
+  // 调试日志：确认返回的标题数据
   console.log(`   ✅ AI处理完成，最终标题: "${processedTitle}"`);
   
   return {
@@ -627,12 +666,17 @@ const getCategoryId = (categoryName, categoryMapping = null, defaultCategoryId =
 /**
  * 执行完整的AI处理流程（包括动态分类获取）
  * 支持多AI引擎分工合作
+ * @param {Object} multiAIManager - 多AI管理器
+ * @param {Object} originalContent - 原始内容
+ * @param {Array} tasks - 任务列表
+ * @param {Object} config - 配置对象
+ * @param {Function} [wordpressCategoryFetcher] - WordPress分类获取函数
  */
-const processNewsWithDynamicCategories = async (multiAIManager, originalContent, tasks, config = {}) => {
+const processNewsWithDynamicCategories = async (multiAIManager, originalContent, tasks, config = {}, wordpressCategoryFetcher = null) => {
   console.log(`🔄 开始完整AI处理流程（包括动态分类获取）`);
   
   // 1. 获取远程分类信息
-  const categoryInfo = await getAllCategories(config);
+  const categoryInfo = await getAllCategories(config, wordpressCategoryFetcher);
   
   if (categoryInfo.errors.length > 0) {
     console.log(`⚠️  分类获取警告:`);
@@ -668,7 +712,7 @@ module.exports = {
   processNewsWithDynamicCategories, // 新增的完整处理函数
   parseKeywords,
   getCategoryId,
-  evaluateTitleQuality, // 新增：标题质量评估
-  regenerateTitle, // 新增：标题重新生成
-  extractTitleAndContent // 新增：智能标题提取
+  evaluateTitleQuality, // 导出标题质量检查函数
+  regenerateTitle, // 导出标题重新生成函数
+  extractTitleAndContent // 导出标题内容提取函数
 };
