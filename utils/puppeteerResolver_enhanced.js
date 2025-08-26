@@ -70,15 +70,86 @@ async function fetchUrlsFromRSS(topicUrl) {
         const rssData = await parser.parseStringPromise(xmlText);
         
         const items = rssData.rss.channel[0].item || [];
-        const encodedUrls = items.map(item => item.link[0]);
+        const articleItems = items.map(item => ({
+            url: item.link[0],
+            title: item.title[0],
+            pubDate: item.pubDate ? new Date(item.pubDate[0]) : null,
+            source: item.source ? item.source[0]._ || item.source[0] : null
+        }));
         
-        console.log(`✅ RSS success: found ${encodedUrls.length} encoded URLs`);
-        return encodedUrls;
+        console.log(`✅ RSS success: found ${articleItems.length} encoded URLs with timestamps`);
+        return articleItems;
         
     } catch (error) {
         console.log(`❌ RSS failed: ${error.message}`);
         return [];
     }
+}
+
+/**
+ * 主解析函数 - 增强版：重定向+Puppeteer组合（保持索引）
+ */
+async function resolveGoogleNewsUrlsWithIndex(urls, options = {}) {
+    if (!urls || urls.length === 0) {
+        return [];
+    }
+
+    console.log(`🔗 Processing ${urls.length} Google News URLs...`);
+    const resolvedResults = [];
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const [index, url] of urls.entries()) {
+        if (url.includes('/stories/')) {
+            console.log(`   - Skipping story collection: ${url.slice(0, 80)}...`);
+            continue;
+        }
+        
+        const itemNumber = index + 1;
+        console.log(`   - Processing ${itemNumber}/${urls.length}: ${url.substring(0, 70)}...`);
+        
+        try {
+            // 首先尝试重定向获取真实新闻URL
+            const realUrl = await fetchRedirectUrl(url);
+            
+            if (realUrl && realUrl !== url) {
+                console.log(`✅ Redirect success: ${realUrl.substring(0, 80)}...`);
+                resolvedResults.push({ url: realUrl, index: index });
+                console.log(`   [${itemNumber}] ✅ Success via redirect`);
+                successCount++;
+            } else {
+                // 重定向失败，尝试Puppeteer
+                console.log(`🎭 Fallback to Puppeteer: ${url.substring(0, 80)}...`);
+                const puppeteerUrls = await fetchUrlWithPuppeteer(url, { timeout: 20000 });
+                
+                if (puppeteerUrls.length > 0) {
+                    resolvedResults.push({ url: puppeteerUrls[0], index: index });
+                    console.log(`   [${itemNumber}] ✅ Success via Puppeteer (${puppeteerUrls.length} URL)`);
+                    successCount++;
+                } else {
+                    console.log(`   [${itemNumber}] ❌ Failed both methods`);
+                    errorCount++;
+                }
+            }
+            
+            // 添加延迟避免过度请求
+            if (itemNumber % 10 === 0) {
+                console.log(`   💤 批次间暂停 2 秒...`);
+                await new Promise(resolve => setTimeout(resolve, 2000));
+            }
+            
+        } catch (error) {
+            console.log(`   [${itemNumber}] ❌ Error: ${error.message}`);
+            errorCount++;
+        }
+    }
+
+    console.log(`\n🎯 处理完成! 统计结果:`);
+    console.log(`   - 成功: ${successCount}`);
+    console.log(`   - 错误: ${errorCount}`);
+    console.log(`   - 总链接数: ${resolvedResults.length}`);
+    
+    return resolvedResults;
 }
 
 /**
@@ -226,15 +297,27 @@ async function getOriginalNewsLinksFromTopic(topicUrl, options = {}) {
     try {
         // 策略1：尝试RSS方式获取编码链接
         console.log(`\n📡 Step 1: RSS extraction...`);
-        const encodedUrls = await fetchUrlsFromRSS(topicUrl);
+        const rssArticles = await fetchUrlsFromRSS(topicUrl);
         
-        if (encodedUrls.length > 0) {
-            console.log(`\n🔄 Step 2: Decoding ${encodedUrls.length} URLs...`);
-            const decodedUrls = await resolveGoogleNewsUrls(encodedUrls, options);
+        if (rssArticles.length > 0) {
+            console.log(`\n🔄 Step 2: Decoding ${rssArticles.length} URLs...`);
+            // 提取URL用于解码
+            const encodedUrls = rssArticles.map(article => article.url);
+            const decodedResults = await resolveGoogleNewsUrlsWithIndex(encodedUrls, options);
             
-            if (decodedUrls.length > 0) {
-                console.log(`✅ Success via RSS + decoding: ${decodedUrls.length} URLs`);
-                return decodedUrls;
+            if (decodedResults.length > 0) {
+                console.log(`✅ Success via RSS + decoding: ${decodedResults.length} URLs`);
+                
+                // 根据索引匹配时间戳（保持顺序一致）
+                const urlsWithTimestamps = decodedResults.map(result => {
+                    const originalArticle = rssArticles[result.index];
+                    return {
+                        url: result.url,
+                        date: originalArticle ? originalArticle.pubDate : new Date()
+                    };
+                });
+                
+                return urlsWithTimestamps;
             }
         }
         

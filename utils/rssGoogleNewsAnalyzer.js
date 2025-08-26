@@ -190,11 +190,11 @@ class RSSGoogleNewsAnalyzer {
       
       // 使用增强版解析器直接获取原始链接
       console.log(`🔧 使用简化解析器解码URL...`);
-      const originalLinks = await getOriginalNewsLinksFromTopic(htmlUrl, {
+      const articleItems = await getOriginalNewsLinksFromTopic(htmlUrl, {
         enablePuppeteer: true // 启用Puppeteer作为备用方案
       });
       
-      if (originalLinks.length === 0) {
+      if (articleItems.length === 0) {
         console.log(`❌ 简化解析器未获取到任何链接`);
         
         return {
@@ -209,14 +209,29 @@ class RSSGoogleNewsAnalyzer {
         };
       }
       
-      // 转换原始链接为article格式
-      const articles = originalLinks.map((url, index) => ({
-        title: `新闻文章 ${index + 1}`,
-        url: url,
-        date: new Date(),
-        source: this.extractSourceFromUrl(url),
-        originalUrl: url // 标记这是已解码的原始URL
-      }));
+      // 转换为article格式，保留时间戳信息
+      const articles = articleItems.map((item, index) => {
+        let articleDate;
+        let articleUrl;
+        
+        if (typeof item === 'string') {
+          // 如果是字符串，说明是旧格式，使用当前时间
+          articleUrl = item;
+          articleDate = new Date();
+        } else {
+          // 如果是对象，使用时间戳信息
+          articleUrl = item.url;
+          articleDate = item.date || new Date();
+        }
+        
+        return {
+          title: `新闻文章 ${index + 1}`,
+          url: articleUrl,
+          date: articleDate,
+          source: this.extractSourceFromUrl(articleUrl),
+          originalUrl: articleUrl // 标记这是已解码的原始URL
+        };
+      });
       
       console.log(`\n📋 增强版解析器最终结果: ${articles.length} 个原始链接`);
       
@@ -229,8 +244,8 @@ class RSSGoogleNewsAnalyzer {
       
       return {
         sourceUrl: htmlUrl,
-        totalFound: originalLinks.length,
-        filtered: originalLinks.length,
+        totalFound: articleItems.length,
+        filtered: articleItems.length,
         processed: articles.length,
         articles: articles,
         success: true,
@@ -272,6 +287,43 @@ class RSSGoogleNewsAnalyzer {
     } catch (error) {
       console.error(`❌ Error extracting source from URL: ${error.message}`);
       return 'Unknown Source';
+    }
+  }
+
+  /**
+   * 尝试从URL中提取时间戳信息
+   */
+  extractTimeFromUrl(url) {
+    try {
+      // 1. 尝试从URL路径中提取日期模式
+      const datePatterns = [
+        /\/(\d{4})\/(\d{1,2})\/(\d{1,2})\//,  // /2024/08/26/
+        /\/(\d{4})-(\d{1,2})-(\d{1,2})\//,   // /2024-08-26/
+        /\/(\d{4})(\d{2})(\d{2})\//,         // /20240826/
+      ];
+
+      for (const pattern of datePatterns) {
+        const match = url.match(pattern);
+        if (match) {
+          const year = parseInt(match[1]);
+          const month = parseInt(match[2]) - 1; // JavaScript月份是0-11
+          const day = parseInt(match[3]);
+          
+          // 验证日期有效性
+          if (year >= 2020 && year <= 2030 && month >= 0 && month <= 11 && day >= 1 && day <= 31) {
+            const extractedDate = new Date(year, month, day);
+            console.log(`   📅 从URL提取到日期: ${extractedDate.toISOString()}`);
+            return extractedDate;
+          }
+        }
+      }
+
+      // 2. 如果URL中没有日期模式，使用当前时间
+      return new Date();
+      
+    } catch (error) {
+      console.error(`❌ Error extracting time from URL: ${error.message}`);
+      return new Date(); // 返回当前时间作为默认值
     }
   }
 }

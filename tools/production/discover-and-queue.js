@@ -31,6 +31,7 @@ const { findRelevantLinks, isGoogleNews } = require('../../utils/sourceAnalyzer_
 const { isDuplicate } = require('../../utils/wordpressDeduplicator');
 const { resolveGoogleNewsUrls } = require('../../utils/puppeteerResolver_enhanced');
 const NewsArticleFilter = require('../../utils/newsArticleFilter');
+const ExecutionStateManager = require('../../utils/executionStateManager');
 
 /**
  * 获取配置文件路径
@@ -198,6 +199,23 @@ async function main() {
       return;
     }
 
+    // 1.5. 初始化执行状态管理器
+    const stateManager = new ExecutionStateManager(config);
+    const executionSummary = await stateManager.getExecutionSummary();
+    
+    // 显示执行状态摘要
+    console.log(`📊 执行状态摘要:`);
+    console.log(`   - 状态模式: ${executionSummary.stateMode}`);
+    console.log(`   - 历史运行次数: ${executionSummary.totalRuns}`);
+    console.log(`   - 上次成功运行: ${executionSummary.lastExecutionTime?.toISOString()}`);
+    console.log(`   - 距离上次运行: ${executionSummary.minutesSinceLastRun} 分钟`);
+    console.log(`   - 累计发现URL: ${executionSummary.totalDiscoveredUrls}`);
+    console.log(`   - 累计推送文章: ${executionSummary.totalPushedArticles}`);
+
+    // 记录发现运行开始时间
+    const discoveryStartTime = new Date();
+    console.log(`\n🕐 记录发现运行开始时间: ${discoveryStartTime.toISOString()}`);
+
     // 2. 加载新闻源目标配置
     const targetsPath = path.resolve(__dirname, '../../', config.discovery.targetsFile || 'config/targets.json');
     const targets = loadTargets(targetsPath);
@@ -214,6 +232,9 @@ async function main() {
 
     const allNewLinks = new Set();
 
+    // 获取基准时间（用于增量抓取）
+    const baselineTime = await stateManager.getLastExecutionTime();
+
     // 4. 遍历所有新闻源
     for (const source of targets) {
       console.log(`\n🔍 开始处理新闻源: ${source.name}`);
@@ -226,17 +247,35 @@ async function main() {
       const allFoundItems = await findRelevantLinks(pageHtml, source.keywords, source.url, multiAIManager);
       console.log(`   Analyzer found ${allFoundItems.length} potential articles.`);
 
-      // Filter by date for Google News
-      let relevantItems = allFoundItems;
+      // 5.1. 应用增量抓取过滤
+      console.log(`   📅 应用增量抓取过滤，基准时间: ${baselineTime.toISOString()}`);
+      let relevantItems = [];
+      for (const item of allFoundItems) {
+        const shouldProcess = await stateManager.shouldProcessArticle(item.date, baselineTime);
+        if (shouldProcess) {
+          relevantItems.push(item);
+          if (item.date) {
+            console.log(`   ✅ 文章通过时间过滤: ${item.date.toISOString()}...`);
+          } else {
+            console.log(`   ⚠️ 文章无日期信息，保留: ${item.url?.substring(0, 50)}...`);
+          }
+        } else {
+          console.log(`   ❌ 文章时间过旧，跳过: ${item.date?.toISOString()}...`);
+        }
+      }
+
+      // 额外的Google News日期过滤（保持向后兼容）
       if (isGoogleNews(source.url)) {
         const yesterday = new Date();
         yesterday.setDate(yesterday.getDate() - 1);
         yesterday.setHours(0, 0, 0, 0); // Start of yesterday
 
-        relevantItems = allFoundItems.filter(item => {
-          return item.date && item.date >= yesterday;
+        const beforeGoogleFilter = relevantItems.length;
+        relevantItems = relevantItems.filter(item => {
+          return !item.date || item.date >= yesterday;
         });
-        console.log(`   Filtered ${allFoundItems.length} articles by date, ${relevantItems.length} remain (from yesterday onwards).`);
+        
+        console.log(`   📰 Google News 时间过滤: ${beforeGoogleFilter} -> ${relevantItems.length} 篇文章 (基准: ${baselineTime.toISOString()})`);
       }
       
       let relevantLinks = relevantItems.map(item => item.url);
@@ -313,6 +352,9 @@ async function main() {
       fs.writeFileSync(outputPath, finalLinks.join('\n'), 'utf8');
       console.log(`\n✅ Successfully wrote ${finalLinks.length} new links to: ${outputPath}`);
 
+      // 7.5. 更新执行状态
+      await stateManager.updateExecutionState(discoveryStartTime);
+
       // 8. (可选) 触发后续处理脚本 - 使用修复版脚本
       console.log('\n🚀 Triggering downstream processing with fixed WordPress connector...');
       const { spawn } = require('child_process');
@@ -345,6 +387,9 @@ async function main() {
 
     } else {
       console.log('\n🏁 No new articles found in this run.');
+      
+      // 即使没有新文章，也更新执行状态
+      await stateManager.updateExecutionState(discoveryStartTime);
     }
 
   } catch (error) {

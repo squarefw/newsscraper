@@ -9,6 +9,7 @@
   "wordpress": {
     "enabled": true,
     "baseUrl": "http://8.208.23.37",
+    "siteUrl": "http://8.208.23.37",
     "username": "FROM_API_KEYS_CONFIG",
     "password": "FROM_API_KEYS_CONFIG",
     "defaultStatus": "draft",
@@ -29,11 +30,11 @@
   },
   "ai": {
     "enabled": true,
-    "processingMode": "original", 
+    "processingMode": "original",
     "defaultEngine": "qwen",
     "taskEngines": {
       "translate": "qwen",
-      "rewrite": "qwen", 
+      "rewrite": "qwen",
       "summarize": "siliconflow",
       "extract_keywords": "siliconflow",
       "categorize": "siliconflow",
@@ -60,7 +61,7 @@
         "timeout": 30000
       },
       "gemini": {
-        "apiKey": "FROM_API_KEYS_CONFIG", 
+        "apiKey": "FROM_API_KEYS_CONFIG",
         "model": "gemini-1.5-flash",
         "maxTokens": 4000,
         "temperature": 0.3,
@@ -109,7 +110,7 @@
     },
     "tasks": [
       "translate",
-      "rewrite", 
+      "rewrite",
       "categorize",
       "article_filter",
       "deduplication"
@@ -150,13 +151,21 @@
     },
     "articleFilter": {
       "enabled": true,
-      "aiEngine": "gemini", 
+      "aiEngine": "gemini",
       "maxLinksToAnalyze": 10000,
       "confidenceThreshold": 5,
       "reporting": {
         "enabled": true,
         "reportPath": "examples/filter-report.txt"
       }
+    }
+  },
+  "execution": {
+    "stateMode": "wordpress",
+    "wordpressBasedFilter": {
+      "enabled": true,
+      "bufferMinutes": 10,
+      "cacheMinutes": 5
     }
   }
 }
