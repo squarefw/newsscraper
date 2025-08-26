@@ -612,17 +612,13 @@ class WordPressConnector {
         }
       } else {
         // 使用 XML-RPC 获取文章信息
-        const xmlContent = this.buildXMLRequest('wp.getPost', [
-          this.config.wordpress.username,
-          this.config.wordpress.password,
+        const result = await this.xmlrpcCall('wp.getPost', [
+          this.config.username,
+          this.config.password,
           postId
         ]);
         
-        const result = await this.makeRequest('/xmlrpc.php', 'POST', xmlContent, {
-          'Content-Type': 'text/xml'
-        });
-        
-        if (result.statusCode === 200) {
+        if (result.success) {
           // 简单检查响应中是否包含 featured_image
           const hasImage = result.data.includes('<name>featured_image</name>');
           return {

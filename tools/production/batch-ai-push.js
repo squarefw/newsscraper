@@ -304,7 +304,7 @@ const pushToWordPressWithConnector = async (processedData, originalUrl, config, 
         
         // 验证特色图片设置
         try {
-          const verification = await wordpressConnector.verifyFeaturedImage(result.postId);
+          const verification = await wpConnector.verifyFeaturedImage(result.postId);
           if (verification.success && verification.hasImage) {
             console.log(`   ✅ 特色图片验证成功`);
           } else {
