@@ -1,0 +1,33 @@
+# 阿里云FC部署自动答案配置文件
+# 复制此文件到 aliyun-deployment/deploy-answers.conf 并修改配置
+# 使用方法: cd aliyun-deployment && ./deploy-to-aliyun-fc.sh --auto
+
+# API密钥配置
+REPLACE_API_KEYS=n                    # 是否替换API密钥 (y/n)
+OPENAI_KEY=                           # OpenAI API Key (留空跳过)
+DEEPSEEK_KEY=                         # DeepSeek API Key (留空跳过)
+ANTHROPIC_KEY=                        # Anthropic API Key (留空跳过)
+
+# WordPress配置
+WORDPRESS_URL=http://8.208.23.37      # WordPress站点URL
+WORDPRESS_USERNAME=i0086editor        # WordPress用户名
+WORDPRESS_PASSWORD=&orDMc*aRm4@*Jecnj(p4tA9  # WordPress密码
+
+# AI提供商配置
+AI_PROVIDER=qwen                      # AI提供商
+
+# 部署配置
+SERVICE_NAME=newsscraper-service      # 服务名称
+FUNCTION_NAME=newsscraper-function    # 函数名称
+REGION=eu-west-1                      # 部署区域
+MEMORY_SIZE=512                       # 内存大小(MB)
+TIMEOUT=900                           # 超时时间(秒)
+
+# 测试配置
+RUN_LOCAL_TEST=y                      # 是否进行本地测试 (y/n)
+TEST_DEPLOYMENT=y                     # 是否测试部署的函数 (y/n)
+SETUP_TIMER=n                         # 是否配置定时触发器 (y/n)
+
+# 定时器配置 (仅当SETUP_TIMER=y时生效)
+CRON_EXPRESSION=0 0 8,20 * * *        # Cron表达式
+TIMER_PAYLOAD={"mode":"full","maxArticles":10,"dryRun":false}  # 定时任务参数

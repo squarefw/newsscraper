@@ -1,13 +1,28 @@
 #!/bin/bash
 
 # 新闻爬虫阿里云FC自动化部署脚本
-# 使用方法: ./deploy-to-aliyun-fc.sh
+# 使用方法: 
+#   交互模式: ./deploy-to-aliyun-fc.sh
+#   自动模式: ./deploy-to-aliyun-fc.sh --auto 或 ./deploy-to-aliyun-fc.sh -a
 
 set -e  # 遇到错误立即退出
 
 # 计算脚本和仓库根目录（在任何cd之前计算以保持正确）
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# 检查是否启用自动模式
+AUTO_MODE=false
+if [[ "$1" == "--auto" || "$1" == "-a" ]]; then
+    AUTO_MODE=true
+    ANSWERS_FILE="$SCRIPT_DIR/deploy-answers.conf"
+    if [[ ! -f "$ANSWERS_FILE" ]]; then
+        echo "错误: 自动模式需要配置文件: $ANSWERS_FILE"
+        exit 1
+    fi
+    echo "🤖 启用自动部署模式，读取配置: $ANSWERS_FILE"
+    source "$ANSWERS_FILE"
+fi
 
 # 颜色定义
 RED='\033[0;31m'
@@ -49,11 +64,20 @@ check_file() {
     fi
 }
 
-# 读取用户输入
+# 读取用户输入（支持自动模式）
 read_input() {
     local prompt="$1"
     local default="$2"
+    local var_name="$3"  # 用于自动模式的变量名
     local input
+
+    # 如果是自动模式且变量已设置，使用预设值
+    if [[ "$AUTO_MODE" == "true" && -n "$var_name" && -n "${!var_name}" ]]; then
+        input="${!var_name}"
+        echo "$prompt [$default]: $input"
+        echo "$input"
+        return
+    fi
 
     if [ -n "$default" ]; then
         read -p "$prompt [$default]: " input
@@ -180,22 +204,22 @@ main() {
     echo ""
 
     # 询问是否需要在部署包内修改 API 密钥
-    CONFIG_API=$(read_input "是否需要在部署包内替换/设置 API 密钥? (y/n)" "y")
+    CONFIG_API=$(read_input "是否需要在部署包内替换/设置 API 密钥? (y/n)" "y" "REPLACE_API_KEYS")
     if [ "$CONFIG_API" = "y" ] || [ "$CONFIG_API" = "Y" ]; then
         # OpenAI配置
-        OPENAI_KEY=$(read_input "OpenAI API Key (留空跳过)" "")
+        OPENAI_KEY=$(read_input "OpenAI API Key (留空跳过)" "" "OPENAI_KEY")
         if [ -n "$OPENAI_KEY" ]; then
             sed -i.bak "s/\"apiKey\": \"YOUR_OPENAI_API_KEY\"/\"apiKey\": \"$OPENAI_KEY\"/" "$DEPLOY_KEY_FILE"
         fi
 
         # DeepSeek配置
-        DEEPSEEK_KEY=$(read_input "DeepSeek API Key (留空跳过)" "")
+        DEEPSEEK_KEY=$(read_input "DeepSeek API Key (留空跳过)" "" "DEEPSEEK_KEY")
         if [ -n "$DEEPSEEK_KEY" ]; then
             sed -i.bak "s/\"apiKey\": \"YOUR_DEEPSEEK_API_KEY\"/\"apiKey\": \"$DEEPSEEK_KEY\"/" "$DEPLOY_KEY_FILE"
         fi
 
         # Anthropic配置
-        ANTHROPIC_KEY=$(read_input "Anthropic API Key (留空跳过)" "")
+        ANTHROPIC_KEY=$(read_input "Anthropic API Key (留空跳过)" "" "ANTHROPIC_KEY")
         if [ -n "$ANTHROPIC_KEY" ]; then
             sed -i.bak "s/\"apiKey\": \"YOUR_ANTHROPIC_API_KEY\"/\"apiKey\": \"$ANTHROPIC_KEY\"/" "$DEPLOY_KEY_FILE"
         fi
@@ -207,24 +231,24 @@ main() {
     echo ""
     log_warn "请配置WordPress连接信息 ($REPO_ROOT/config/config.remote-aliyun.json):"
 
-    WP_URL=$(read_input "WordPress站点URL" "")
+    WP_URL=$(read_input "WordPress站点URL" "" "WORDPRESS_URL")
     if [ -n "$WP_URL" ]; then
         sed -i.bak "s|\"url\": \"https://your-wordpress-site.com\"|\"url\": \"$WP_URL\"|" "$REPO_ROOT/config/config.remote-aliyun.json"
     fi
 
-    WP_USERNAME=$(read_input "WordPress用户名" "")
+    WP_USERNAME=$(read_input "WordPress用户名" "" "WORDPRESS_USERNAME")
     if [ -n "$WP_USERNAME" ]; then
         sed -i.bak "s/\"username\": \"your-username\"/\"username\": \"$WP_USERNAME\"/" "$REPO_ROOT/config/config.remote-aliyun.json"
     fi
 
-    WP_PASSWORD=$(read_input "WordPress密码" "")
+    WP_PASSWORD=$(read_input "WordPress密码" "" "WORDPRESS_PASSWORD")
     if [ -n "$WP_PASSWORD" ]; then
         sed -i.bak "s/\"password\": \"your-password\"/\"password\": \"$WP_PASSWORD\"/" "$REPO_ROOT/config/config.remote-aliyun.json"
     fi
 
     # AI提供商配置 - 基于实际可用的密钥
     echo "检测到的AI服务: $AI_PROVIDERS"
-    AI_PROVIDER=$(read_input "AI提供商 ($AI_PROVIDERS)" "qwen")
+    AI_PROVIDER=$(read_input "AI提供商 ($AI_PROVIDERS)" "qwen" "AI_PROVIDER")
     sed -i.bak "s/\"provider\": \"[^\"]*\"/\"provider\": \"$AI_PROVIDER\"/" "$REPO_ROOT/config/config.remote-aliyun.json"
 
     log_success "WordPress和AI配置完成"
@@ -240,11 +264,11 @@ main() {
     log_info "🏗️ 部署配置..."
 
     # 询问部署参数
-    SERVICE_NAME=$(read_input "服务名称" "newsscraper-service")
-    FUNCTION_NAME=$(read_input "函数名称" "newsscraper-function")
-    REGION=$(read_input "部署区域" "eu-west-1")
-    MEMORY_SIZE=$(read_input "内存大小(MB)" "512")
-    TIMEOUT=$(read_input "超时时间(秒)" "900")
+    SERVICE_NAME=$(read_input "服务名称" "newsscraper-service" "SERVICE_NAME")
+    FUNCTION_NAME=$(read_input "函数名称" "newsscraper-function" "FUNCTION_NAME")
+    REGION=$(read_input "部署区域" "eu-west-1" "REGION")
+    MEMORY_SIZE=$(read_input "内存大小(MB)" "512" "MEMORY_SIZE")
+    TIMEOUT=$(read_input "超时时间(秒)" "900" "TIMEOUT")
 
     # 更新s.yaml配置
     sed -i.bak "s/name: newsscraper-service/name: $SERVICE_NAME/" s.yaml
@@ -262,7 +286,7 @@ main() {
 
     # 本地测试
     echo ""
-    TEST_LOCAL=$(read_input "是否进行本地测试? (y/n)" "y")
+    TEST_LOCAL=$(read_input "是否进行本地测试? (y/n)" "y" "RUN_LOCAL_TEST")
     if [ "$TEST_LOCAL" = "y" ] || [ "$TEST_LOCAL" = "Y" ]; then
         log_info "🧪 进行本地测试..."
         node test-local.js
@@ -310,7 +334,7 @@ EOF
 
         # 测试部署
         echo ""
-        TEST_DEPLOY=$(read_input "是否测试部署的函数? (y/n)" "y")
+        TEST_DEPLOY=$(read_input "是否测试部署的函数? (y/n)" "y" "TEST_DEPLOYMENT")
         if [ "$TEST_DEPLOY" = "y" ] || [ "$TEST_DEPLOY" = "Y" ]; then
             log_info "🧪 测试部署的函数..."
 
@@ -336,12 +360,12 @@ EOF
 
         # 配置定时触发器
         echo ""
-        SETUP_TIMER=$(read_input "是否配置定时触发器? (y/n)" "n")
+        SETUP_TIMER=$(read_input "是否配置定时触发器? (y/n)" "n" "SETUP_TIMER")
         if [ "$SETUP_TIMER" = "y" ] || [ "$SETUP_TIMER" = "Y" ]; then
             log_info "⏰ 配置定时触发器..."
 
-            CRON_EXPRESSION=$(read_input "Cron表达式 (默认: 每天8点和20点)" "0 0 8,20 * * *")
-            TIMER_PAYLOAD=$(read_input "定时任务参数" '{"mode":"full","maxArticles":10,"dryRun":false}')
+            CRON_EXPRESSION=$(read_input "Cron表达式 (默认: 每天8点和20点)" "0 0 8,20 * * *" "CRON_EXPRESSION")
+            TIMER_PAYLOAD=$(read_input "定时任务参数" '{"mode":"full","maxArticles":10,"dryRun":false}' "TIMER_PAYLOAD")
 
             # 添加定时触发器到s.yaml
             cat >> s.yaml << EOF

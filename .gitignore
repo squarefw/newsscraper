@@ -14,6 +14,10 @@ aliyun-deployment/*fc-deploy*/
 /config/*local*.json
 /config/api-keys.json_bk
 
+# Ignore deployment answer files (contain sensitive info)
+deploy-answers.conf
+aliyun-deployment/deploy-answers.conf
+
 # Optional: ignore deploy info and temporary outputs
 deploy-info.txt
 
