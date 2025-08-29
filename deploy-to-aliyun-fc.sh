@@ -180,19 +180,19 @@ main() {
         # OpenAI配置
         OPENAI_KEY=$(read_input "OpenAI API Key (留空跳过)" "")
         if [ -n "$OPENAI_KEY" ]; then
-            sed -i.bak "s/\"apiKey\": \"your-openai-api-key\"/\"apiKey\": \"$OPENAI_KEY\"/" "$DEPLOY_KEY_FILE"
+            sed -i.bak "s/\"apiKey\": \"YOUR_OPENAI_API_KEY\"/\"apiKey\": \"$OPENAI_KEY\"/" "$DEPLOY_KEY_FILE"
         fi
 
         # DeepSeek配置
         DEEPSEEK_KEY=$(read_input "DeepSeek API Key (留空跳过)" "")
         if [ -n "$DEEPSEEK_KEY" ]; then
-            sed -i.bak "s/\"apiKey\": \"your-deepseek-api-key\"/\"apiKey\": \"$DEEPSEEK_KEY\"/" "$DEPLOY_KEY_FILE"
+            sed -i.bak "s/\"apiKey\": \"YOUR_DEEPSEEK_API_KEY\"/\"apiKey\": \"$DEEPSEEK_KEY\"/" "$DEPLOY_KEY_FILE"
         fi
 
         # Anthropic配置
         ANTHROPIC_KEY=$(read_input "Anthropic API Key (留空跳过)" "")
         if [ -n "$ANTHROPIC_KEY" ]; then
-            sed -i.bak "s/\"apiKey\": \"your-anthropic-api-key\"/\"apiKey\": \"$ANTHROPIC_KEY\"/" "$DEPLOY_KEY_FILE"
+            sed -i.bak "s/\"apiKey\": \"YOUR_ANTHROPIC_API_KEY\"/\"apiKey\": \"$ANTHROPIC_KEY\"/" "$DEPLOY_KEY_FILE"
         fi
 
         log_success "部署包内的 API 密钥已更新"
