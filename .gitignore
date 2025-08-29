@@ -107,3 +107,4 @@ examples/*
 .browser_cache/
 screenshots/
 *.har
+aliyun-deployment/archived/
