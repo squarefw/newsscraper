@@ -1,0 +1,31 @@
+edition: 1.0.0
+name: newsscraper-fc
+access: default
+
+services:
+  newsscraper:
+    component: fc
+    props:
+      region: eu-west-1
+      service:
+        name: newsscraper-service
+        description: 'News scraper service'
+      function:
+        name: newsscraper-function
+        description: 'News scraper function'
+        codeUri: ./
+        handler: index.handler
+        runtime: nodejs18
+        timeout: 900
+        memorySize: 512
+        environmentVariables:
+          NODE_ENV: production
+          TZ: Asia/Shanghai
+      triggers:
+        - name: httpTrigger
+          type: http
+          config:
+            authType: anonymous
+            methods:
+              - GET
+              - POST
