@@ -1,3 +1,26 @@
+# Ignore unpacked deployment artifacts under aliyun-deployment
+aliyun-deployment/fc-deploy-*/
+aliyun-deployment/fc-deploy-*/**
+aliyun-deployment/*.zip
+aliyun-deployment/*fc-deploy*/
+
+# Ignore local backups and temp files often created by scripts
+**/*.bak
+**/*_bk
+*~
+
+# Ignore local API keys and backups
+/config/api-keys.local.json
+/config/*local*.json
+/config/api-keys.json_bk
+
+# Optional: ignore deploy info and temporary outputs
+deploy-info.txt
+
+# Common ignores
+node_modules/
+.DS_Store
+.env
 # Dependencies
 node_modules/
 npm-debug.log*
