@@ -222,9 +222,10 @@ main() {
         sed -i.bak "s/\"password\": \"your-password\"/\"password\": \"$WP_PASSWORD\"/" "$REPO_ROOT/config/config.remote-aliyun.json"
     fi
 
-    # AI提供商配置
-    AI_PROVIDER=$(read_input "AI提供商 (openai/deepseek/anthropic)" "openai")
-    sed -i.bak "s/\"provider\": \"openai\"/\"provider\": \"$AI_PROVIDER\"/" "$REPO_ROOT/config/config.remote-aliyun.json"
+    # AI提供商配置 - 基于实际可用的密钥
+    echo "检测到的AI服务: $AI_PROVIDERS"
+    AI_PROVIDER=$(read_input "AI提供商 ($AI_PROVIDERS)" "qwen")
+    sed -i.bak "s/\"provider\": \"[^\"]*\"/\"provider\": \"$AI_PROVIDER\"/" "$REPO_ROOT/config/config.remote-aliyun.json"
 
     log_success "WordPress和AI配置完成"
 
