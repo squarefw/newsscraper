@@ -29,7 +29,7 @@ ${existingTitles.map((title, index) => `${index + 1}. ${title}`).join('\n')}
 请只回答 "YES" (重复) 或 "NO" (不重复)。`;
 };
 
-const axios = require('axios');
+const WordPressConnector = require('./wordpressConnector');
 const { extractNewsFromUrl } = require('./newsExtractor');
 
 let titleCache = null;
@@ -51,25 +51,29 @@ const getRecentWordPressTitles = async (config) => {
 
   console.log('[去重] 正在从WordPress获取最新文章标题...');
   try {
-    const response = await axios.get(`${wordpress.baseUrl}/wp-json/wp/v2/posts`, {
-      params: {
-        per_page: deduplication.recentPostsCount,
-        _fields: 'title.rendered' // 只获取标题字段以提高效率
-      },
-      auth: {
-        username: wordpress.username,
-        password: wordpress.password
-      },
-      timeout: 10000
-    });
-
-    const titles = response.data.map(post => post.title.rendered);
+    // 使用WordPressConnector而不是直接调用axios
+    const wpConnector = new WordPressConnector(wordpress);
+    
+    // 获取最近的文章标题
+    const posts = await wpConnector.getRecentPosts(deduplication.recentPostsCount || 50);
+    
+    const titles = posts.map(post => post.title);
     titleCache = titles;
     cacheTimestamp = now;
     console.log(`[去重] 成功获取 ${titles.length} 个标题并已缓存。`);
     return titles;
   } catch (error) {
     console.error('[去重] 获取WordPress标题失败:', error.message);
+    
+    // 如果是401错误，提供更详细的错误信息
+    if (error.message.includes('401') || error.message.includes('UNAUTHORIZED')) {
+      console.error('[去重] ❌ WordPress认证失败，可能原因：');
+      console.error('  1. 用户名或密码错误');
+      console.error('  2. 用户权限不足');
+      console.error('  3. WordPress禁用了REST API和XML-RPC');
+      console.error('  4. WordPress需要Application Password认证');
+    }
+    
     return []; // 失败时返回空数组，避免阻塞流程
   }
 };

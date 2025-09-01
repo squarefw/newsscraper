@@ -33,7 +33,7 @@
     "schedule": "0 */4 * * *",
     "aiSearchEnabled": true,
     "aiExtractionEnabled": true,
-    "enabled": false,
+    "enabled": true,
     "keywords": ["ireland", "irish", "politics", "economy", "housing", "cork", "galway"],
     "type": "google-news"
   }

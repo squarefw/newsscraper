@@ -1,25 +1,7 @@
-# Ignore unpacked deployment artifacts under aliyun-deployment
-aliyun-deployment/fc-deploy-*/
-aliyun-deployment/fc-deploy-*/**
-aliyun-deployment/*.zip
-aliyun-deployment/*fc-deploy*/
-
-# Ignore local backups and temp files often created by scripts
-**/*.bak
-**/*_bk
-*~
-
-# Ignore local API keys and backups
+# Local API keys and backups
 /config/api-keys.local.json
 /config/*local*.json
 /config/api-keys.json_bk
-
-# Ignore deployment answer files (contain sensitive info)
-deploy-answers.conf
-aliyun-deployment/deploy-answers.conf
-
-# Optional: ignore deploy info and temporary outputs
-deploy-info.txt
 
 # Common ignores
 node_modules/
@@ -111,4 +93,3 @@ examples/*
 .browser_cache/
 screenshots/
 *.har
-aliyun-deployment/archived/

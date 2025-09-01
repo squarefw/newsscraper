@@ -46,11 +46,12 @@ npm run push      # 内容推送
 │   ├── api-keys.local.json      # 实际密钥文件（Git忽略）
 │   ├── config-loader.js         # 配置加载器
 │   ├── config.remote-230.json   # 主配置文件
+│   ├── config.remote-aliyun.json # 阿里云ECS配置
 │   ├── targets.json             # 新闻源配置
 │   └── ai-prompts.json          # AI提示配置
 ├── tools/production/
 │   ├── discover-and-queue.js    # 新闻发现主程序
-│   └── batch-ai-push.js          # 内容处理推送
+│   └── batch-ai-push.js         # 内容处理推送
 ├── utils/                       # 核心工具模块
 ├── examples/
 │   └── pending-urls.txt         # URL队列文件

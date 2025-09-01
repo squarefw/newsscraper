@@ -149,6 +149,70 @@ class WordPressConnector {
   }
 
   /**
+   * 获取最近的文章列表
+   * @param {number} count 获取文章数量，默认50
+   * @returns {Promise<Array>} 文章列表
+   */
+  async getRecentPosts(count = 50) {
+    if (!this.preferredMethod) {
+      await this.detectBestMethod();
+    }
+
+    if (this.preferredMethod === 'rest') {
+      return this.getRecentPostsRest(count);
+    } else {
+      return this.getRecentPostsXMLRPC(count);
+    }
+  }
+
+  /**
+   * 通过REST API获取最近文章
+   */
+  async getRecentPostsRest(count) {
+    try {
+      const result = await this.makeRestRequest(`posts?per_page=${count}&_fields=id,title,date`, 'GET');
+      if (result.statusCode === 200) {
+        const posts = JSON.parse(result.data);
+        return posts.map(post => ({
+          id: post.id,
+          title: post.title.rendered,
+          date: post.date
+        }));
+      }
+      throw new Error(`REST API获取文章失败: ${result.statusCode}`);
+    } catch (error) {
+      console.warn('REST API获取文章失败，尝试XML-RPC:', error.message);
+      return this.getRecentPostsXMLRPC(count);
+    }
+  }
+
+  /**
+   * 通过XML-RPC获取最近文章
+   */
+  async getRecentPostsXMLRPC(count) {
+    try {
+      const result = await this.xmlrpcCall('wp.getPosts', [
+        1, // blog_id
+        this.config.username,
+        this.config.password,
+        {
+          number: count,
+          post_status: 'publish'
+        }
+      ]);
+
+      if (result.statusCode === 200 && !result.data.includes('faultCode')) {
+        // 解析XML-RPC响应中的文章信息
+        const posts = this.parseXMLRPCPosts(result.data);
+        return posts;
+      }
+      throw new Error('XML-RPC获取文章失败');
+    } catch (error) {
+      throw new Error(`获取文章失败: ${error.message}`);
+    }
+  }
+
+  /**
    * 从URL上传图片到WordPress媒体库
    */
   async uploadImageFromUrl(imageUrl) {
@@ -317,6 +381,40 @@ class WordPressConnector {
       throw new Error('XML-RPC上传失败');
     } catch (error) {
       throw new Error(`上传图片失败: ${error.message}`);
+    }
+  }
+
+  /**
+   * 获取网站信息
+   */
+  async getSiteInfo() {
+    try {
+      if (!this.preferredMethod) {
+        await this.detectBestMethod();
+      }
+
+      if (this.preferredMethod === 'rest') {
+        const result = await this.makeRestRequest('');
+        return {
+          success: true,
+          name: result.data?.name || 'WordPress Site',
+          url: this.config.baseUrl,
+          method: 'rest'
+        };
+      } else {
+        const result = await this.xmlrpcCall('wp.getOptions', []);
+        return {
+          success: true,
+          name: result.data?.blog_title || 'WordPress Site',
+          url: this.config.baseUrl,
+          method: 'xmlrpc'
+        };
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message
+      };
     }
   }
 
@@ -593,6 +691,35 @@ class WordPressConnector {
     }
     
     return categories;
+  }
+
+  /**
+   * 解析XML-RPC文章数据
+   */
+  parseXMLRPCPosts(xmlData) {
+    const posts = [];
+    
+    // 匹配所有文章结构
+    const postPattern = /<struct>(.*?)<\/struct>/gs;
+    const matches = xmlData.match(postPattern);
+    
+    if (matches) {
+      matches.forEach(match => {
+        const postIdMatch = match.match(/<name>post_id<\/name><value><string>([^<]+)<\/string>/);
+        const titleMatch = match.match(/<name>post_title<\/name><value><string>([^<]+)<\/string>/);
+        const dateMatch = match.match(/<name>post_date<\/name><value><dateTime\.iso8601>([^<]+)<\/dateTime\.iso8601>/);
+        
+        if (postIdMatch && titleMatch) {
+          posts.push({
+            id: postIdMatch[1],
+            title: titleMatch[1],
+            date: dateMatch ? dateMatch[1] : null
+          });
+        }
+      });
+    }
+    
+    return posts;
   }
 
   /**
