@@ -267,9 +267,9 @@ const finalCleanContent = (content, type = 'content') => {
     // 标题特殊处理
     cleaned = cleaned.replace(/^["'「」『』""'']*|["'「」『』""'']*$/g, '');
     cleaned = cleaned.replace(/[：:]\s*$/, '');
-    // 确保标题长度合理
-    if (cleaned.length > 25) {
-      cleaned = cleaned.substring(0, 22) + '...';
+    // 确保标题长度合理 - WordPress标题字段限制通常是255字符，中文标题60字符比较合适
+    if (cleaned.length > 60) {
+      cleaned = cleaned.substring(0, 57) + '...';
     }
   }
 
