@@ -20,8 +20,8 @@ services:
       - newsscraper_data:/app/data
     networks:
       - newsscraper-network
-    # 使用统一服务脚本
-    command: ["node", "tools/production/unified-service.js", "config/config.remote-230.json"]
+    # 使用定时触发统一服务脚本
+    command: ["node", "tools/production/unified-service-cron.js", "config/config.remote-aliyun.json"]
 
   # Web 质量测试工具（可选）
   web-quality-tester:
