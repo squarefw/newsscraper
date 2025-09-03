@@ -1,0 +1,55 @@
+# Docker 忽略文件
+.git
+.gitignore
+README.md
+*.md
+.env
+.env.local
+.env.example
+node_modules
+npm-debug.log
+.nyc_output
+.coverage
+*.log
+logs/*
+temp/*
+
+# 开发文件
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# 测试文件
+test/
+tests/
+spec/
+*.test.js
+*.spec.js
+
+# 文档
+docs/
+*.md
+!README.md
+
+# 构建文件
+dist/
+build/
+.next/
+.nuxt/
+.cache/
+
+# 备份文件
+*.backup
+*.bak
+*.tmp
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# SSL 证书（如果有的话）
+*.pem
+*.key
+*.crt

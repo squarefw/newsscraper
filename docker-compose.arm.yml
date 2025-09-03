@@ -1,0 +1,73 @@
+version: '3.8'
+
+services:
+  # 统一新闻处理服务（合并discovery和app）
+  newsscraper:
+    image: newsscraper:latest
+    container_name: newsscraper-unified
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - TZ=Asia/Shanghai
+      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+      - DISPLAY=:99
+    env_file:
+      - .env
+    volumes:
+      - ./config:/app/config:ro
+      - ./examples:/app/examples
+      - ./logs:/app/logs
+      - newsscraper_data:/app/data
+    networks:
+      - newsscraper-network
+    # Puppeteer 需要更大的共享内存 (针对反检测优化)
+    shm_size: 2gb
+    # 添加必要的capabilities
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - seccomp:unconfined
+    # 使用cron调度的统一服务脚本
+    command: ["node", "tools/production/unified-service-cron.js", "config/config.remote-aliyun.json"]
+    # 提高资源配置以支持高级反检测
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 1G
+          cpus: '0.5'
+
+  # Web 质量测试工具（可选）
+  web-quality-tester:
+    image: newsscraper:latest
+    container_name: newsscraper-web-tester
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - TZ=Asia/Shanghai
+    env_file:
+      - .env
+    volumes:
+      - ./config:/app/config:ro
+      - ./tools/web-quality-tester:/app/tools/web-quality-tester:ro
+      - ./logs:/app/logs
+    networks:
+      - newsscraper-network
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.3'
+    working_dir: /app/tools/web-quality-tester
+    command: ["node", "server.js"]
+
+volumes:
+  newsscraper_data:
+
+networks:
+  newsscraper-network:
+    driver: bridge

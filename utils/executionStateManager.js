@@ -78,7 +78,7 @@ class ExecutionStateManager {
   }
 
   /**
-   * 从WordPress获取最新文章时间戳
+   * 从WordPress获取最新文章时间戳（使用XML-RPC）
    */
   async getLastWordPressPostTime() {
     try {
@@ -95,32 +95,18 @@ class ExecutionStateManager {
         throw new Error('WordPress配置不完整');
       }
 
-      // 构建WordPress REST API URL
-      const apiUrl = `${wordpress.siteUrl}/wp-json/wp/v2/posts?per_page=1&orderby=date&order=desc`;
+      // 使用XML-RPC获取最新文章
+      const latestPostTime = await this.getLatestPostTimeViaXMLRPC();
       
-      const response = await axios.get(apiUrl, {
-        timeout: 10000,
-        headers: {
-          'User-Agent': 'NewsScraperBot/1.0'
-        }
-      });
-
-      if (response.data && response.data.length > 0) {
-        const latestPost = response.data[0];
-        const postTime = new Date(latestPost.date_gmt || latestPost.date);
-        
-        // 更新缓存
-        this.wordpressCache = postTime;
-        this.cacheExpiry = Date.now() + this.cacheTimeoutMs;
-        
-        console.log(`✅ WordPress最新文章时间: ${postTime.toISOString()}`);
-        return postTime;
-      } else {
-        throw new Error('WordPress API返回空数据');
-      }
+      // 更新缓存
+      this.wordpressCache = latestPostTime;
+      this.cacheExpiry = Date.now() + this.cacheTimeoutMs;
+      
+      console.log(`✅ WordPress最新文章时间: ${latestPostTime.toISOString()}`);
+      return latestPostTime;
 
     } catch (error) {
-      console.log(`⚠️ WordPress REST API访问受限 (${error.response?.status || error.code}): ${error.message}`);
+      console.log(`⚠️ WordPress XML-RPC访问失败: ${error.message}`);
       console.log('💡 这是正常情况，将使用降级策略');
       
       // 降级策略：使用24小时前的时间戳
@@ -133,6 +119,150 @@ class ExecutionStateManager {
       
       return fallbackTime;
     }
+  }
+
+  /**
+   * 通过XML-RPC获取最新文章时间
+   */
+  async getLatestPostTimeViaXMLRPC() {
+    const https = require('https');
+    const http = require('http');
+    const { URL } = require('url');
+
+    return new Promise((resolve, reject) => {
+      const wordpress = this.config.wordpress;
+      const xmlrpcUrl = `${wordpress.siteUrl}/xmlrpc.php`;
+      const url = new URL(xmlrpcUrl);
+      const client = url.protocol === 'https:' ? https : http;
+      
+      // 构建XML-RPC请求，获取最新的1篇文章
+      const xmlRequest = `<?xml version="1.0" encoding="UTF-8"?>
+<methodCall>
+  <methodName>wp.getPosts</methodName>
+  <params>
+    <param><value><string>1</string></value></param>
+    <param><value><string>${this.escapeXml(wordpress.username)}</string></value></param>
+    <param><value><string>${this.escapeXml(wordpress.password)}</string></value></param>
+    <param><value>
+      <struct>
+        <member><name>number</name><value><int>1</int></value></member>
+        <member><name>post_status</name><value><string>publish</string></value></member>
+        <member><name>orderby</name><value><string>post_date</string></value></member>
+        <member><name>order</name><value><string>DESC</string></value></member>
+      </struct>
+    </value></param>
+  </params>
+</methodCall>`;
+
+      const req = client.request({
+        hostname: url.hostname,
+        port: url.port || (url.protocol === 'https:' ? 443 : 80),
+        path: url.pathname,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/xml',
+          'Content-Length': Buffer.byteLength(xmlRequest),
+          'User-Agent': 'NewsScraperBot/1.0'
+        },
+        timeout: 10000
+      }, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
+          try {
+            if (res.statusCode !== 200) {
+              throw new Error(`HTTP ${res.statusCode}: ${res.statusMessage}`);
+            }
+
+            // 检查是否有错误
+            if (data.includes('faultCode')) {
+              const faultMatch = data.match(/<name>faultString<\/name><value><string>([^<]+)<\/string>/);
+              const errorMsg = faultMatch ? faultMatch[1] : 'XML-RPC调用失败';
+              throw new Error(errorMsg);
+            }
+
+            console.log('🔍 XML-RPC响应片段（前500字符）:');
+            console.log(data.substring(0, 500));
+
+            // 检查是否返回空数组（没有文章）
+            if (data.includes('<array><data></data></array>') || data.includes('<array><data>\n</data></array>')) {
+              console.log('📝 WordPress中没有发布的文章，使用24小时前作为基准');
+              const fallbackTime = new Date(Date.now() - 24 * 60 * 60 * 1000);
+              console.log(`🔄 使用24小时前时间: ${fallbackTime.toISOString()}`);
+              resolve(fallbackTime);
+              return;
+            }
+
+            // 解析最新文章的日期
+            const dateMatch = data.match(/<name>post_date<\/name><value><dateTime\.iso8601>([^<]+)<\/dateTime\.iso8601>/);
+            
+            if (dateMatch) {
+              // WordPress XML-RPC返回的日期格式通常是 YYYYMMDDTHH:MM:SS
+              const dateString = dateMatch[1];
+              const parsedDate = this.parseWordPressDate(dateString);
+              console.log(`📅 解析到的最新文章时间: ${parsedDate.toISOString()}`);
+              resolve(parsedDate);
+            } else {
+              console.log('⚠️ 响应中未找到文章日期，可能WordPress中没有文章');
+              // 如果没有文章，使用24小时前作为基准，确保只处理最近24小时的新闻
+              const fallbackTime = new Date(Date.now() - 24 * 60 * 60 * 1000);
+              console.log(`🔄 使用24小时前时间: ${fallbackTime.toISOString()}`);
+              resolve(fallbackTime);
+            }
+          } catch (parseError) {
+            reject(parseError);
+          }
+        });
+      });
+      
+      req.on('error', reject);
+      req.on('timeout', () => {
+        req.destroy();
+        reject(new Error('XML-RPC请求超时'));
+      });
+      
+      req.write(xmlRequest);
+      req.end();
+    });
+  }
+
+  /**
+   * 解析WordPress日期格式
+   */
+  parseWordPressDate(dateString) {
+    // WordPress XML-RPC可能返回多种格式的日期
+    // 常见格式: 20250903T20:30:00, 2025-09-03T20:30:00Z, 等
+    
+    // 尝试标准ISO格式
+    let date = new Date(dateString);
+    if (!isNaN(date.getTime())) {
+      return date;
+    }
+    
+    // 尝试WordPress特有格式: YYYYMMDDTHH:MM:SS
+    const wpMatch = dateString.match(/^(\d{4})(\d{2})(\d{2})T(\d{2}):(\d{2}):(\d{2})$/);
+    if (wpMatch) {
+      const [, year, month, day, hour, minute, second] = wpMatch;
+      date = new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}Z`);
+      if (!isNaN(date.getTime())) {
+        return date;
+      }
+    }
+    
+    // 如果都解析失败，抛出错误
+    throw new Error(`无法解析日期格式: ${dateString}`);
+  }
+
+  /**
+   * XML字符转义
+   */
+  escapeXml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
 
   /**
