@@ -95,6 +95,31 @@ const readUrlsFromFile = (filePath) => {
   }
 };
 
+// 从URL文件中移除指定的URL
+const removeUrlFromFile = (filePath, urlToRemove) => {
+  try {
+    if (!fs.existsSync(filePath)) {
+      console.log(`⚠️ URL文件不存在: ${filePath}`);
+      return;
+    }
+    
+    const content = fs.readFileSync(filePath, 'utf8');
+    const lines = content.split('\n');
+    
+    // 过滤掉要删除的URL，保留注释和其他内容
+    const filteredLines = lines.filter(line => {
+      const trimmedLine = line.trim();
+      return trimmedLine !== urlToRemove;
+    });
+    
+    // 写回文件
+    fs.writeFileSync(filePath, filteredLines.join('\n'));
+    console.log(`🗑️ 已从队列文件中移除URL: ${urlToRemove.substring(0, 50)}...`);
+  } catch (error) {
+    console.log(`⚠️ 移除URL失败: ${error.message}`);
+  }
+};
+
 // 从URL提取新闻内容
 const extractNewsFromUrl = async (url) => {
   console.log(`📡 正在访问: ${url}`);
@@ -492,6 +517,9 @@ async function main() {
         
         console.log(`✅ URL处理完成 (${urlDuration}ms) - 推送${pushResult.success ? '成功' : '失败'}`);
         
+        // 无论推送是否成功，都从队列文件中移除已处理的URL
+        removeUrlFromFile(urlFile, url);
+        
       } catch (error) {
         const urlDuration = Date.now() - urlStartTime;
         
@@ -503,6 +531,9 @@ async function main() {
         });
         
         console.log(`❌ URL处理失败: ${error.message} (${urlDuration}ms)`);
+        
+        // 即使处理失败，也从队列文件中移除，避免重复处理失败的URL
+        removeUrlFromFile(urlFile, url);
       }
       
       // 添加延迟避免请求过快
@@ -573,4 +604,4 @@ if (require.main === module) {
   main().catch(console.error);
 }
 
-module.exports = { main, readUrlsFromFile, extractNewsFromUrl };
+module.exports = { main, readUrlsFromFile, removeUrlFromFile, extractNewsFromUrl };
