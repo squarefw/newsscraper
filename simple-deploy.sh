@@ -6,7 +6,7 @@
 set -e
 
 # 配置变量
-REMOTE_HOST="${1:-root@192.168.1.230}"
+REMOTE_HOST="${1:-weifang@192.168.1.230}"
 APP_NAME="newsscraper"
 DEPLOY_DIR="${HOME}/${APP_NAME}"  # 使用用户主目录避免权限问题
 
@@ -113,6 +113,13 @@ transfer_files() {
         --exclude='temp' \
         --exclude='*.tar.gz' \
         --exclude='.DS_Store' \
+        --exclude='._*' \
+        --exclude='examples/pending-urls.txt' \
+        --exclude='examples/discovered-urls.txt' \
+        --exclude='examples/processed-urls.txt' \
+        --exclude='examples/filter-report.txt' \
+        --exclude='examples/*.json' \
+        --no-mac-metadata \
         -czf ${APP_NAME}-deploy.tar.gz .
     
     # 获取远程用户主目录并创建部署目录
