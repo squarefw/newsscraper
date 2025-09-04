@@ -222,7 +222,7 @@ cron.schedule(CRON_SCHEDULES.dailyFullRun, () => {
     console.log('\n🌅 ===== 每日完整运行触发 =====');
     runFullProcess();
 }, {
-    timezone: "Asia/Shanghai"
+    timezone: "Europe/Dublin"
 });
 
 // 以下调度任务已禁用
@@ -232,7 +232,7 @@ cron.schedule(CRON_SCHEDULES.discoveryRun, () => {
     console.log('\n🔍 ===== 发现任务触发 =====');
     runDiscovery();
 }, {
-    timezone: "Asia/Shanghai"
+    timezone: "Europe/Dublin"
 });
 
 // 每2小时处理检查
@@ -240,7 +240,7 @@ cron.schedule(CRON_SCHEDULES.processingCheck, () => {
     console.log('\n📝 ===== 处理检查触发 =====');
     runProcessing();
 }, {
-    timezone: "Asia/Shanghai"
+    timezone: "Europe/Dublin"
 });
 
 // 每小时快速处理
@@ -248,7 +248,7 @@ cron.schedule(CRON_SCHEDULES.quickProcess, () => {
     console.log('\n⚡ ===== 快速处理触发 =====');
     runQuickProcess();
 }, {
-    timezone: "Asia/Shanghai"
+    timezone: "Europe/Dublin"
 });
 */
 

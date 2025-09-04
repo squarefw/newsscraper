@@ -10,7 +10,7 @@ services:
     restart: unless-stopped
     environment:
       - NODE_ENV=production
-      - TZ=Asia/Shanghai
+      - TZ=Europe/Dublin
     env_file:
       - .env
     volumes:
@@ -34,7 +34,7 @@ services:
       - "3000:3000"
     environment:
       - NODE_ENV=production
-      - TZ=Asia/Shanghai
+      - TZ=Europe/Dublin
     env_file:
       - .env
     volumes:
