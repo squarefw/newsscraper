@@ -9,24 +9,34 @@ const xml2js = require('xml2js');
 /**
  * 网络重定向获取真实新闻URL
  */
-async function fetchRedirectUrl(url) {
-    try {
-        const response = await fetch(url, { 
-            method: 'HEAD', 
-            redirect: 'follow',
-            timeout: 10000,
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (compatible; NewsScraperBot/1.0)'
+async function fetchRedirectUrl(url, maxRetries = 2) {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            // 对于RSS链接，使用GET方法比HEAD更可靠，因为服务器可能对HEAD请求有不同处理
+            const response = await fetch(url, {
+                method: 'GET', 
+                redirect: 'follow',
+                follow: 10, // 允许最多10次重定向
+                timeout: 15000, // 增加超时时间
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                }
+            });
+            
+            // 检查最终URL是否有效且不是原始URL
+            if (response.url && response.url !== url && !response.url.includes('google.com')) {
+                return response.url;
+            } else {
+                // 如果最终URL还是google.com，说明重定向未完成，返回null
+                return null;
             }
-        });
-        
-        if (response.url !== url) {
-            return response.url;
-        } else {
-            return null;
+        } catch (e) {
+            console.log(`   - Redirect attempt ${attempt} failed: ${e.message}`);
+            if (attempt === maxRetries) {
+                return null;
+            }
+            await new Promise(resolve => setTimeout(resolve, 2000)); // 重试前等待
         }
-    } catch (e) {
-        return null;
     }
 }
 
@@ -118,17 +128,24 @@ async function resolveGoogleNewsUrlsWithIndex(urls, options = {}) {
                 console.log(`   [${itemNumber}] ✅ Success via redirect`);
                 successCount++;
             } else {
-                // 重定向失败，尝试Puppeteer
-                console.log(`🎭 Fallback to Puppeteer: ${url.substring(0, 80)}...`);
-                const puppeteerUrls = await fetchUrlWithPuppeteer(url, { timeout: 20000 });
-                
-                if (puppeteerUrls.length > 0) {
-                    resolvedResults.push({ url: puppeteerUrls[0], index: index });
-                    console.log(`   [${itemNumber}] ✅ Success via Puppeteer (${puppeteerUrls.length} URL)`);
-                    successCount++;
+                // 如果是RSS链接，重定向失败后，使用专门的Puppeteer流程
+                if (url.includes('/rss/articles/')) {
+                    console.log(`🎭 Redirect failed, using Puppeteer for RSS link: ${url.substring(0, 80)}...`);
+                    const finalUrl = await fetchUrlWithPuppeteer(url, { timeout: 30000, isRssLink: true });
+                    if (finalUrl.length > 0) {
+                        resolvedResults.push({ url: finalUrl[0], index: index });
+                        console.log(`   [${itemNumber}] ✅ Success via Puppeteer (RSS)`);
+                        successCount++;
+                    }
                 } else {
-                    console.log(`   [${itemNumber}] ❌ Failed both methods`);
-                    errorCount++;
+                    // 对于非RSS链接（例如直接从网页抓取的），仍然可以尝试Puppeteer作为后备
+                    console.log(`🎭 Fallback to Puppeteer: ${url.substring(0, 80)}...`);
+                    const puppeteerUrls = await fetchUrlWithPuppeteer(url, { timeout: 20000 });
+                    if (puppeteerUrls.length > 0) {
+                        resolvedResults.push({ url: puppeteerUrls[0], index: index });
+                        console.log(`   [${itemNumber}] ✅ Success via Puppeteer`);
+                        successCount++;
+                    } // 如果Puppeteer也失败，fetchUrlWithPuppeteer内部会打印错误，这里不再重复打印
                 }
             }
             
@@ -184,17 +201,24 @@ async function resolveGoogleNewsUrls(urls, options = {}) {
                 console.log(`   [${itemNumber}] ✅ Success via redirect`);
                 successCount++;
             } else {
-                // 重定向失败，使用Puppeteer
-                console.log(`🎭 Fallback to Puppeteer: ${url.substring(0, 80)}...`);
-                const puppeteerResults = await fetchUrlWithPuppeteer(url, options);
-                
-                if (puppeteerResults.length > 0) {
-                    puppeteerResults.forEach(link => resolvedLinks.add(link));
-                    console.log(`   [${itemNumber}] ✅ Success via Puppeteer (${puppeteerResults.length} URL)`);
-                    successCount++;
+                // 如果是RSS链接，重定向失败后，使用专门的Puppeteer流程
+                if (url.includes('/rss/articles/')) {
+                    console.log(`🎭 Redirect failed, using Puppeteer for RSS link: ${url.substring(0, 80)}...`);
+                    const finalUrl = await fetchUrlWithPuppeteer(url, { timeout: 30000, isRssLink: true });
+                    if (finalUrl.length > 0) {
+                        finalUrl.forEach(link => resolvedLinks.add(link));
+                        console.log(`   [${itemNumber}] ✅ Success via Puppeteer (RSS)`);
+                        successCount++;
+                    }
                 } else {
-                    console.log(`   [${itemNumber}] ❌ Both redirect and Puppeteer failed`);
-                    errorCount++;
+                    // 对于非RSS链接（例如直接从网页抓取的），仍然可以尝试Puppeteer作为后备
+                    console.log(`🎭 Fallback to Puppeteer: ${url.substring(0, 80)}...`);
+                    const puppeteerResults = await fetchUrlWithPuppeteer(url, options);
+                    if (puppeteerResults.length > 0) {
+                        puppeteerResults.forEach(link => resolvedLinks.add(link));
+                        console.log(`   [${itemNumber}] ✅ Success via Puppeteer`);
+                        successCount++;
+                    } // 如果Puppeteer也失败，fetchUrlWithPuppeteer内部会打印错误，这里不再重复打印
                 }
             }
             
@@ -227,10 +251,13 @@ async function fetchUrlWithPuppeteer(googleNewsUrl, options = {}) {
     let browser = null;
     try {
         console.log(`🎭 Puppeteer解析: ${googleNewsUrl.substring(0, 80)}...`);
-        
-        // 动态导入puppeteer
-        const puppeteer = require('puppeteer');
-        
+
+        // 使用 puppeteer-extra 和 stealth 插件来增强反检测能力
+        const puppeteer = require('puppeteer-extra');
+        const StealthPlugin = require('puppeteer-extra-plugin-stealth');
+        puppeteer.use(StealthPlugin());
+
+        // 启动浏览器
         browser = await puppeteer.launch({
             headless: true,
             args: [
@@ -238,28 +265,47 @@ async function fetchUrlWithPuppeteer(googleNewsUrl, options = {}) {
                 '--disable-setuid-sandbox',
                 '--disable-dev-shm-usage',
                 '--disable-web-security',
+                '--disable-gpu',
                 '--disable-features=VizDisplayCompositor',
-                '--disable-blink-features=AutomationControlled'
+                '--disable-blink-features=AutomationControlled',
+                // 在某些环境中，指定语言可以帮助跳过语言选择页面
+                '--lang=en-US,en'
             ]
         });
         
         const page = await browser.newPage();
-        
+
+        // 设置额外的HTTP头信息，使其看起来更像真实浏览器
+        await page.setExtraHTTPHeaders({
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
+        });
+
         // 设置用户代理和视口
         await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
         await page.setViewport({ width: 1280, height: 720 });
         
         // 设置超时时间
-        const timeout = options.timeout || 30000;
+        const timeout = options.timeout || 45000; // 适当增加超时时间
+        page.setDefaultNavigationTimeout(timeout);
         
         // 访问Google News URL，让它自动跳转到最终的新闻源
         await page.goto(googleNewsUrl, { 
-            waitUntil: 'networkidle2',
+            // 对于RSS链接，等待页面加载完成即可；对于普通网页，等待DOM内容加载
+            waitUntil: options.isRssLink ? 'load' : 'domcontentloaded',
             timeout: timeout 
         });
-        
-        // 等待页面完全加载和可能的重定向
-        await new Promise(resolve => setTimeout(resolve, 3000));
+
+        // 仅在处理非RSS链接（即可能出现弹窗的普通网页）时，才处理Consent页面
+        // 移除 isRssLink 判断，对所有 Puppeteer 访问都检查同意页面
+        try {
+            const consentButton = await page.waitForSelector('button[aria-label="Accept all"], button[aria-label="Reject all"]', { timeout: 7000 }); // 稍微增加超时
+            console.log('   - 发现Google Consent页面，尝试点击同意按钮...');
+            await consentButton.click();
+            await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 15000 }); // 增加导航等待时间
+        } catch (e) {
+            console.log('   - 未发现Google Consent页面或超时，继续执行。');
+        }
         
         // 获取最终的URL（经过所有重定向后的新闻源URL）
         const finalUrl = page.url();

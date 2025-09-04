@@ -259,21 +259,25 @@ run_docker_test() {
         echo "=================================="
         
         # 在容器内运行测试
-        \$DOCKER_CMD exec newsscraper-unified node temp/docker-test.js
+        \$DOCKER_CMD exec newsscraper-unified node temp/docker-test.js;
+        TEST_EXIT_CODE=\$?
         
         echo "=================================="
         echo "📊 测试结果分析"
         echo "=================================="
         
         # 检查测试结果
-        if [ \$? -eq 0 ]; then
+        if [ \$TEST_EXIT_CODE -eq 0 ]; then
             echo "✅ Docker环境测试成功!"
             echo "🎉 增强版Puppeteer解析器在远程Docker环境中正常工作!"
         else
-            echo "❌ Docker环境测试失败"
+            echo "❌ Docker环境测试失败 (退出码: \$TEST_EXIT_CODE)"
             echo "📋 查看详细日志..."
             \$COMPOSE_CMD logs --tail=20 newsscraper
         fi
+
+        # 确保整个ssh会话返回正确的退出码
+        exit \$TEST_EXIT_CODE
 EOF
     
     local test_result=$?

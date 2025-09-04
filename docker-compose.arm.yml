@@ -16,6 +16,7 @@ services:
     volumes:
       - ./config:/app/config:ro
       - ./examples:/app/examples
+      - ./temp:/app/temp
       - ./logs:/app/logs
       - newsscraper_data:/app/data
     networks:
