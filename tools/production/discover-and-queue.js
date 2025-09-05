@@ -295,6 +295,12 @@ async function main() {
           const resolverOptions = config.discovery.urlResolver || {};
           processedLinks = await resolveGoogleNewsUrls(relevantLinks, resolverOptions);
           console.log(`   ✅ Decoding finished, resolved to ${processedLinks.length} final URLs.`);
+          
+          // 调试信息：检查解码后的URL样本
+          console.log(`   🔍 解码结果样本:`);
+          processedLinks.slice(0, 3).forEach((url, i) => {
+            console.log(`      ${i + 1}. ${url.substring(0, 100)}...`);
+          });
         }
       }
 
