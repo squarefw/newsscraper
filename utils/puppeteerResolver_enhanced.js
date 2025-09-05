@@ -308,7 +308,7 @@ async function fetchUrlWithPuppeteer(googleNewsUrl, options = {}) {
         }
         
         // 获取最终的URL（经过所有重定向后的新闻源URL）
-        const finalUrl = page.url();
+        let finalUrl = page.url();
         
         // 验证这是一个有效的新闻源URL（不是Google相关域名）
         if (finalUrl && 
@@ -317,8 +317,14 @@ async function fetchUrlWithPuppeteer(googleNewsUrl, options = {}) {
             !finalUrl.includes('googlenews.com') &&
             !finalUrl.includes('googleusercontent.com')) {
             
-            console.log(`   ✅ 成功获取新闻源URL: ${finalUrl.substring(0, 100)}...`);
-            return [finalUrl]; // 返回单个新闻源URL
+            // 清理URL，移除Google UTM参数
+            const urlObj = new URL(finalUrl);
+            const paramsToRemove = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'gaa_at', 'gaa_n', 'gaa_ts', 'gaa_sig'];
+            paramsToRemove.forEach(param => urlObj.searchParams.delete(param));
+            const cleanUrl = urlObj.toString();
+            
+            console.log(`   ✅ 成功获取新闻源URL: ${cleanUrl.substring(0, 100)}...`);
+            return [cleanUrl]; // 返回清理后的URL
         } else {
             console.log(`   ⚠️ 未能获取有效的新闻源URL，当前URL: ${finalUrl}`);
             return [];
