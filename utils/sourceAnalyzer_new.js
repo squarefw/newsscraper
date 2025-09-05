@@ -144,14 +144,14 @@ const processStandardNewsLinks = (articles, baseUrl) => {
 /**
  * 使用RSS从Google News中提取链接和日期（新方法）
  */
-const extractLinksWithRSS = async (url, baseUrl) => {
+const extractLinksWithRSS = async (url, baseUrl, options = {}) => {
   try {
     const RSSGoogleNewsAnalyzer = require('./rssGoogleNewsAnalyzer');
     const analyzer = new RSSGoogleNewsAnalyzer();
     
     console.log(`🔍 Using RSS method for Google News: ${url}`);
     
-    const result = await analyzer.processGoogleNewsUrl(url);
+    const result = await analyzer.processGoogleNewsUrl(url, options);
     
     if (result.success) {
       console.log(`✅ RSS extraction successful: ${result.processed} articles`);
@@ -236,10 +236,14 @@ const extractStandardLinksWithCheerio = (html, baseUrl) => {
  * @param {MultiAIManager} aiManager - AI管理器实例
  * @returns {Promise<{url: string, date: Date | null}[]>} - 发现的URL链接数组
  */
-const findRelevantLinks = async (pageHtml, keywords, baseUrl, aiManager) => {
+const findRelevantLinks = async (pageHtml, keywords, baseUrl, aiManager, options = {}) => {
   const isGoogleNewsPage = isGoogleNews(baseUrl);
+  const { testMode = false } = options;
   
   console.log(`   Detected ${isGoogleNewsPage ? 'Google News' : 'a standard news site'}`);
+  if (testMode && isGoogleNewsPage) {
+    console.log(`   🧪 测试模式：将限制RSS解码的URL数量`);
+  }
 
   let rawItems = [];
 
@@ -247,7 +251,7 @@ const findRelevantLinks = async (pageHtml, keywords, baseUrl, aiManager) => {
     // 对于Google News，优先使用RSS方法
     console.log('   Using RSS method for Google News...');
     try {
-      rawItems = await extractLinksWithRSS(baseUrl, baseUrl);
+      rawItems = await extractLinksWithRSS(baseUrl, baseUrl, { testMode });
       if (rawItems.length === 0) {
         console.log('   RSS method failed, falling back to Cheerio...');
         rawItems = extractLinksWithCheerio(pageHtml, baseUrl);

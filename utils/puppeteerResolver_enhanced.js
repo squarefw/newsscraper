@@ -345,6 +345,7 @@ async function fetchUrlWithPuppeteer(googleNewsUrl, options = {}) {
  */
 async function getOriginalNewsLinksFromTopic(topicUrl, options = {}) {
     console.log(`🚀 Starting enhanced news link extraction from: ${topicUrl}`);
+    const { testMode = false } = options;
     
     try {
         // 策略1：尝试RSS方式获取编码链接
@@ -352,9 +353,17 @@ async function getOriginalNewsLinksFromTopic(topicUrl, options = {}) {
         const rssArticles = await fetchUrlsFromRSS(topicUrl);
         
         if (rssArticles.length > 0) {
-            console.log(`\n🔄 Step 2: Decoding ${rssArticles.length} URLs...`);
+            let urlsToProcess = rssArticles;
+            
+            // 测试模式：限制处理的URL数量
+            if (testMode && rssArticles.length > 5) {
+                console.log(`🧪 测试模式：从 ${rssArticles.length} 个RSS链接中选择前 5 个进行解码`);
+                urlsToProcess = rssArticles.slice(0, 5);
+            }
+            
+            console.log(`\n🔄 Step 2: Decoding ${urlsToProcess.length} URLs...`);
             // 提取URL用于解码
-            const encodedUrls = rssArticles.map(article => article.url);
+            const encodedUrls = urlsToProcess.map(article => article.url);
             const decodedResults = await resolveGoogleNewsUrlsWithIndex(encodedUrls, options);
             
             if (decodedResults.length > 0) {
@@ -362,7 +371,7 @@ async function getOriginalNewsLinksFromTopic(topicUrl, options = {}) {
                 
                 // 根据索引匹配时间戳（保持顺序一致）
                 const urlsWithTimestamps = decodedResults.map(result => {
-                    const originalArticle = rssArticles[result.index];
+                    const originalArticle = urlsToProcess[result.index]; // 使用urlsToProcess而不是rssArticles
                     return {
                         url: result.url,
                         date: originalArticle ? originalArticle.pubDate : new Date()

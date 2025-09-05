@@ -9,7 +9,32 @@
  * 例子:
  *   node discover-and-queue.js                                    # 使用默认配置
  *   node discover-and-queue.js config/config.remote-aliyun.json  # 使用阿里云配置
- *   node discover-and-queue.js config/config.remote-230.json     # 使用230配置
+ *   node       // 5.7. Google News URL解码
+      let processedLinks = relevantLinks;
+      if (isGoogleNews(source.url)) {
+        console.log(`   Detected Google News source, checking ${relevantLinks.length} links...`);
+        
+        if (relevantLinks.length > 0) {
+          // 检查是否需要解码：如果URL中包含google.com，说明是编码URL，需要解码
+          const urlsToCheck = relevantLinks.map(linkObj => 
+            typeof linkObj === 'string' ? linkObj : linkObj.url
+          ).filter(url => url);
+          
+          const needsDecoding = urlsToCheck.some(url => url.includes('google.com'));
+          
+          console.log(`   Sample URLs: ${urlsToCheck.slice(0, 2).join(', ')}`);
+          console.log(`   Needs decoding: ${needsDecoding}`);
+          
+          if (needsDecoding) {
+            console.log(`   Found Google News encoded URLs, decoding...`);
+            const resolverOptions = config.discovery.urlResolver || {};
+            processedLinks = await resolveGoogleNewsUrls(relevantLinks, resolverOptions);
+            console.log(`   ✅ Decoding finished, resolved to ${processedLinks.length} final URLs.`);
+          } else {
+            console.log(`   URLs already decoded, skipping decoding step.`);
+          }
+        }
+      }-queue.js config/config.remote-230.json     # 使用230配置
  * 
  * 职责:
  * 1. 监控配置文件中指定的新闻源。
@@ -34,14 +59,20 @@ const NewsArticleFilter = require('../../utils/newsArticleFilter');
 const ExecutionStateManager = require('../../utils/executionStateManager');
 
 /**
- * 获取配置文件路径
+ * 获取配置文件路径和运行模式
  */
-const getConfigPath = () => {
+const parseArgs = () => {
   const args = process.argv.slice(2);
   let configPath = 'config/config.remote-230.json'; // 默认配置
+  let testMode = false;
   
-  if (args.length >= 1) {
-    configPath = args[0];
+  // 解析参数
+  for (const arg of args) {
+    if (arg === '--test') {
+      testMode = true;
+    } else if (!arg.startsWith('--')) {
+      configPath = arg;
+    }
   }
   
   // 如果配置路径是相对路径，相对于项目根目录解析
@@ -49,7 +80,7 @@ const getConfigPath = () => {
     configPath = path.resolve(__dirname, '../../', configPath);
   }
   
-  return configPath;
+  return { configPath, testMode };
 };
 
 /**
@@ -188,11 +219,14 @@ async function main() {
   console.log('=============================================\n');
 
   try {
-    // 1. 加载配置
-    const configPath = getConfigPath();
+    // 1. 解析参数并加载配置
+    const { configPath, testMode } = parseArgs();
     const config = loadConfig(configPath);
 
     console.log(`📋 使用配置文件: ${configPath}`);
+    if (testMode) {
+      console.log(`🧪 测试模式：仅处理5个URL`);
+    }
 
     if (!config.discovery?.enabled) {
       console.log('🟡 新闻发现功能未在配置中启用，脚本退出。');
@@ -244,7 +278,7 @@ async function main() {
       if (!pageHtml) continue;
 
       // 5. AI发现相关链接
-      const allFoundItems = await findRelevantLinks(pageHtml, source.keywords, source.url, multiAIManager);
+      const allFoundItems = await findRelevantLinks(pageHtml, source.keywords, source.url, multiAIManager, { testMode });
       console.log(`   Analyzer found ${allFoundItems.length} potential articles.`);
 
       // 5.1. 应用增量抓取过滤
@@ -282,25 +316,35 @@ async function main() {
 
       if (relevantLinks.length === 0) continue;
 
+      // 测试模式：限制处理的URL数量
+      if (testMode && relevantLinks.length > 5) {
+        console.log(`   🧪 测试模式：从 ${relevantLinks.length} 个链接中选择前 5 个进行处理`);
+        relevantLinks = relevantLinks.slice(0, 5);
+      }
+
       // 处理所有相关链接，不做数量限制
-      console.log(`   Processing all ${relevantLinks.length} relevant links.`);
+      console.log(`   Processing ${testMode ? 'first ' : 'all '}${relevantLinks.length} relevant links.`);
 
       // 5.5. 如果是Google News，使用新的解码器解析链接
       let processedLinks = relevantLinks;
       if (isGoogleNews(source.url)) {
-        console.log(`   Detected Google News source, decoding ${relevantLinks.length} links...`);
+        console.log(`   Detected Google News source, checking ${relevantLinks.length} links...`);
         
         if (relevantLinks.length > 0) {
-          // 传递URL解析器配置
-          const resolverOptions = config.discovery.urlResolver || {};
-          processedLinks = await resolveGoogleNewsUrls(relevantLinks, resolverOptions);
-          console.log(`   ✅ Decoding finished, resolved to ${processedLinks.length} final URLs.`);
-          
-          // 调试信息：检查解码后的URL样本
-          console.log(`   🔍 解码结果样本:`);
-          processedLinks.slice(0, 3).forEach((url, i) => {
-            console.log(`      ${i + 1}. ${url.substring(0, 100)}...`);
+          // 检查是否需要解码：如果URL中包含news.google.com/rss/articles，说明是编码URL，需要解码
+          const needsDecoding = relevantLinks.some(url => {
+            return url && (url.includes('news.google.com/rss/articles') || url.includes('news.google.com/articles'));
           });
+          
+          if (needsDecoding) {
+            console.log(`   Found Google News encoded URLs, decoding...`);
+            const resolverOptions = config.discovery.urlResolver || {};
+            processedLinks = await resolveGoogleNewsUrls(relevantLinks, resolverOptions);
+            console.log(`   ✅ Decoding finished, resolved to ${processedLinks.length} final URLs.`);
+          } else {
+            console.log(`   URLs already decoded, skipping decoding step.`);
+            console.log(`   Sample URLs: ${relevantLinks.slice(0, 2).map(url => url.substring(0, 60) + '...').join(', ')}`);
+          }
         }
       }
 
@@ -312,7 +356,14 @@ async function main() {
         
         // 获取链接内容信息
         const linkDataArray = [];
-        const maxLinks = Math.min(processedLinks.length, filterConfig.maxLinksToAnalyze || 10);
+        let maxLinks = Math.min(processedLinks.length, filterConfig.maxLinksToAnalyze || 10);
+        
+        // 测试模式：进一步限制AI分析的链接数量
+        if (testMode) {
+          maxLinks = Math.min(maxLinks, 5);
+          console.log(`   🧪 测试模式：AI筛选限制为 ${maxLinks} 个链接`);
+        }
+        
         for (let i = 0; i < maxLinks; i++) {
           const url = processedLinks[i];
           console.log(`   📋 获取内容 ${i + 1}/${maxLinks}: ${url.slice(0, 60)}...`);

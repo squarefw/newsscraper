@@ -184,14 +184,19 @@ class RSSGoogleNewsAnalyzer {
   /**
    * 主处理方法
    */
-  async processGoogleNewsUrl(htmlUrl) {
+  async processGoogleNewsUrl(htmlUrl, options = {}) {
     try {
+      const { testMode = false } = options;
       console.log(`🚀 开始处理Google News URL: ${htmlUrl}`);
+      if (testMode) {
+        console.log(`🧪 测试模式：将限制URL解码数量为5个`);
+      }
       
       // 使用增强版解析器直接获取原始链接
       console.log(`🔧 使用简化解析器解码URL...`);
       const articleItems = await getOriginalNewsLinksFromTopic(htmlUrl, {
-        enablePuppeteer: true // 启用Puppeteer作为备用方案
+        enablePuppeteer: true, // 启用Puppeteer作为备用方案
+        testMode: testMode     // 传递测试模式
       });
       
       if (articleItems.length === 0) {
