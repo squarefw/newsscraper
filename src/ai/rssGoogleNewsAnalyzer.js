@@ -3,7 +3,7 @@ const cheerio = require('cheerio');
 const { 
   getOriginalNewsLinksFromTopic, 
   debugDecodeUrl 
-} = require('./puppeteerResolver_enhanced');
+} = require('../browser/puppeteerResolver_enhanced');
 
 /**
  * 全新的基于RSS的Google News源分析器

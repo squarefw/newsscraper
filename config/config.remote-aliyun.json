@@ -151,7 +151,6 @@
         },
         "articleFilter": {
             "enabled": true,
-            "aiEngine": "gemini",
             "maxLinksToAnalyze": 10000,
             "confidenceThreshold": 5,
             "reporting": {

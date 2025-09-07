@@ -109,12 +109,23 @@ ${truncatedHtml}
  * 处理Google News的特殊链接格式（RSS版本）
  */
 const processGoogleNewsLinks = (articles, baseUrl) => {
-  // RSS方法返回的文章已经是正确格式，只需要过滤和转换
+  // RSS方法返回的文章已经是正确格式，但Cheerio后备方法可能返回相对链接
   return articles.map(article => {
+    if (!article || !article.url) {
+        return null;
+    }
     let link = article.url;
-    
-    // RSS链接格式：https://news.google.com/rss/articles/CBMi...
-    // 这些链接需要特殊处理，但目前我们先保持原样
+
+    // 如果是Cheerio提取的相对路径，补全为绝对路径
+    if (link.startsWith('./')) {
+      try {
+        link = new URL(link, baseUrl).href;
+        // console.log(`   🔗 Resolved relative link to: ${link}`);
+      } catch (e) {
+        console.error(`   ❌ Failed to resolve relative URL: ${link} with base ${baseUrl}`);
+        return null;
+      }
+    }
     
     // 过滤掉明显的无效链接
     if (link.includes('google.com/search') || 

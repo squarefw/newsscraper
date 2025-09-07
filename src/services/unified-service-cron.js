@@ -53,7 +53,7 @@ async function runDiscovery() {
     console.log(`🔍 [${timestamp}] 开始新闻发现...`);
 
     try {
-        const discovery = spawn('node', ['tools/production/discover-and-queue.js', configFile], {
+        const discovery = spawn('node', ['src/services/discover-and-queue.js', configFile], {
             stdio: 'inherit',
             cwd: process.cwd()
         });
@@ -96,7 +96,7 @@ async function runProcessing() {
     console.log(`📝 [${timestamp}] 开始处理队列...`);
 
     try {
-        const processing = spawn('node', ['tools/production/batch-ai-push.js', configFile, urlsFile], {
+        const processing = spawn('node', ['src/services/batch-ai-push.js', configFile, urlsFile], {
             stdio: 'inherit',
             cwd: process.cwd()
         });
@@ -135,7 +135,7 @@ async function runFullProcess() {
     try {
         // 先运行发现
         await new Promise((resolve) => {
-            const discovery = spawn('node', ['tools/production/discover-and-queue.js', configFile], {
+            const discovery = spawn('node', ['src/services/discover-and-queue.js', configFile], {
                 stdio: 'inherit',
                 cwd: process.cwd()
             });
@@ -158,7 +158,7 @@ async function runFullProcess() {
         // 运行处理
         await new Promise((resolve) => {
             if (fs.existsSync(urlsFile) && fs.readFileSync(urlsFile, 'utf8').trim().length > 0) {
-                const processing = spawn('node', ['tools/production/batch-ai-push.js', configFile, urlsFile], {
+                const processing = spawn('node', ['src/services/batch-ai-push.js', configFile, urlsFile], {
                     stdio: 'inherit',
                     cwd: process.cwd()
                 });

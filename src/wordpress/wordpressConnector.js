@@ -53,6 +53,7 @@ class WordPressConnector {
         data: result.data
       };
     } catch (error) {
+      console.error('   ❌ REST API Test Error:', error);
       return {
         success: false,
         method: 'rest',
@@ -80,6 +81,7 @@ class WordPressConnector {
         data: result.data
       };
     } catch (error) {
+      console.error('   ❌ XML-RPC Test Error:', error);
       return {
         success: false,
         method: 'xmlrpc',

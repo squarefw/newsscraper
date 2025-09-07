@@ -41,7 +41,7 @@ ${existingTitles.map((title, index) => `${index + 1}. ${title}`).join('\n')}
 };
 
 const WordPressConnector = require('./wordpressConnector');
-const { extractNewsFromUrl } = require('./newsExtractor');
+const { extractNewsFromUrl } = require('../article/newsExtractor');
 
 let titleCache = null;
 let cacheTimestamp = 0;

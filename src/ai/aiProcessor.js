@@ -4,7 +4,7 @@
  * 支持多AI引擎分工合作
  */
 
-const { getAllCategories } = require('./remoteCategoryManager');
+const { getAllCategories } = require('../wordpress/remoteCategoryManager');
 const { MultiAIManager } = require('./multiAIManager');
 
 /**

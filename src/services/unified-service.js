@@ -17,7 +17,7 @@ const PROCESSING_INTERVAL = 10 * 60 * 1000; // 10分钟检查一次处理队列
 // 解析配置路径
 // 配置文件路径
 const configFile = process.argv[2] || 'config/config.remote-aliyun.json';
-const urlsFile = 'examples/pending-urls.txt';
+const urlsFile = 'temp/pending-urls.txt';
 const configPath = path.resolve(configFile);
 
 console.log('🚀 NewsScraper 统一处理服务启动');
@@ -60,7 +60,7 @@ async function runDiscovery() {
 async function runProcessing() {
   return new Promise((resolve, reject) => {
     // 检查队列文件是否存在且有内容
-    const queueFile = path.resolve(__dirname, '../../examples/pending-urls.txt');
+    const queueFile = path.resolve(__dirname, '../../temp/pending-urls.txt');
     
     if (!fs.existsSync(queueFile)) {
       console.log(`📝 [${new Date().toLocaleString()}] 队列文件不存在，跳过处理`);

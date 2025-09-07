@@ -10,7 +10,7 @@ class NewsArticleFilter {
     constructor(multiAIManager, config = {}) {
         this.multiAIManager = multiAIManager;
         this.config = {
-            aiEngine: 'gemini',
+            aiEngine: 'gemini', // This is now just a fallback
             confidenceThreshold: 5,
             reporting: {
                 enabled: true,
@@ -19,6 +19,13 @@ class NewsArticleFilter {
             ...config
         };
         
+        // The actual engine used will be determined by multiAIManager.getAgentForTask('article_filter')
+        // We keep this.config.aiEngine for logging and reporting purposes.
+        const actualEngine = this.multiAIManager.getEngineNameForTask('article_filter');
+        if (actualEngine) {
+            this.config.aiEngine = actualEngine;
+        }
+
         this.filterPrompt = `你是一个新闻链接筛选专家。请分析给定的URL和页面内容，判断这是否是一个具体的新闻文章页面。
 
 判断标准：

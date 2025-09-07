@@ -9,8 +9,8 @@ const fs = require('fs');
 const path = require('path');
 
 // 引入配置加载器和WordPress连接器
-const ConfigLoader = require('../../config/config-loader');
-const WordPressConnector = require('../../utils/wordpressConnector');
+const ConfigLoader = require('../config/loader');
+const WordPressConnector = require('../wordpress/wordpressConnector');
 
 // 从命令行参数读取配置
 const getConfig = () => {
@@ -60,7 +60,7 @@ const loadConfig = (configPath) => {
 const loadAIProcessor = () => {
   try {
     // 优先使用JavaScript版本（支持动态分类）
-    const aiProcessor = require('../../utils/aiProcessor');
+    const aiProcessor = require('../ai/aiProcessor');
     console.log('✅ AI处理器加载成功 (JavaScript版本 - 支持动态分类)');
     return aiProcessor;
   } catch (error) {
@@ -407,7 +407,7 @@ async function main() {
     
     // 创建多AI管理器
     console.log('🚀 创建多AI管理器...');
-    const { MultiAIManager } = require('../../utils/multiAIManager');
+    const { MultiAIManager } = require('../ai/multiAIManager');
     const multiAIManager = new MultiAIManager(config);
     console.log('✅ 多AI管理器创建成功');
     

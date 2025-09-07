@@ -7,7 +7,8 @@ const path = require('path');
  */
 class ConfigLoader {
   constructor() {
-    this.configDir = path.dirname(__filename);
+    // __dirname is src/config, we need to go to the project root's config directory
+    this.configDir = path.resolve(__dirname, '../../config');
     this.apiKeysPath = path.join(this.configDir, 'api-keys.local.json');
     this.apiKeysTemplatePath = path.join(this.configDir, 'api-keys.json');
   }

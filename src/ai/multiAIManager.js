@@ -17,7 +17,7 @@ class MultiAIManager {
     this.initialized = false;
     this.prompts = null; // 将加载高质量prompt配置
   }
-  
+
   /**
    * 初始化AI管理器
    */
@@ -537,6 +537,14 @@ class MultiAIManager {
     console.log(`   🎯 Task '${task}' assigned to AI engine: ${targetEngine}`);
     
     return this.getAgent(targetEngine);
+  }
+  
+  /**
+   * 获取任务的引擎名称
+   */
+  getEngineNameForTask(task) {
+    const specifiedEngine = this.config.ai.taskEngines?.[task];
+    return specifiedEngine || this.defaultEngine;
   }
   
   /**

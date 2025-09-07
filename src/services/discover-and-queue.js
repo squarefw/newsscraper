@@ -11,7 +11,15 @@
  *   node discover-and-queue.js config/config.remote-aliyun.json  # 使用阿里云配置
  *   node       // 5.7. Google News URL解码
       let processedLinks = relevantLinks;
-      if (isGoogleNews(source.url)) {
+      if (is        // 初始化文章筛选器 - 使用完整配置，并强制使用taskEngines中的配置
+        const filterConfig = {
+          ...config.discovery.articleFilter,
+          aiEngine: config.ai.taskEngines.article_filter || config.discovery.articleFilter.aiEngine
+        };
+        const articleFilter = new NewsArticleFilter(multiAIManager, filterConfig);
+        
+        // 执行筛选
+        articleLinks = await articleFilter.filterNewsArticles(linkDataArray);eNews(source.url)) {
         console.log(`   Detected Google News source, checking ${relevantLinks.length} links...`);
         
         if (relevantLinks.length > 0) {
@@ -50,13 +58,13 @@ const axios = require('axios');
 const { exec } = require('child_process');
 
 // --- 动态加载模块 ---
-const ConfigLoader = require('../../config/config-loader');
-const { MultiAIManager } = require('../../utils/multiAIManager');
-const { findRelevantLinks, isGoogleNews } = require('../../utils/sourceAnalyzer_new'); // 使用增强版
-const { isDuplicate } = require('../../utils/wordpressDeduplicator');
-const { resolveGoogleNewsUrls } = require('../../utils/puppeteerResolver_enhanced');
-const NewsArticleFilter = require('../../utils/newsArticleFilter');
-const ExecutionStateManager = require('../../utils/executionStateManager');
+const ConfigLoader = require('../config/loader');
+const { MultiAIManager } = require('../ai/multiAIManager');
+const { findRelevantLinks, isGoogleNews } = require('../ai/sourceAnalyzer_new'); // 使用增强版
+const { isDuplicate } = require('../wordpress/wordpressDeduplicator');
+const { resolveGoogleNewsUrls } = require('../browser/puppeteerResolver_enhanced');
+const NewsArticleFilter = require('../article/newsArticleFilter');
+const ExecutionStateManager = require('../common/executionStateManager');
 
 /**
  * 获取配置文件路径和运行模式
