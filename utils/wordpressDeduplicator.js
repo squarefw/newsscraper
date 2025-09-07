@@ -9,22 +9,33 @@
 const buildDeduplicationPrompt = (newTitle, existingTitles) => {
   return `你是一位专业的新闻编辑和内容去重专家。你的任务是判断一篇新文章是否与已有文章重复。
 
-重复判断标准：
+重要说明：只有在新文章与已有文章报道完全相同的事件或内容时，才能判定为重复。
+
+重复判断标准（必须同时满足）：
 1. 相同核心事件：报道同一个具体事件、新闻或公告
 2. 相同主题焦点：虽然用词不同，但核心关注点完全一致
 3. 时效性考虑：同一时期发生的相同类型事件
+
+不重复的情况包括：
+- 相同主题但不同事件（如"A公司财报"与"B公司财报"）
+- 相同主题但不同角度（如"房价上涨"与"购房建议"）
+- 相同地区但不同事件（如"都柏林交通事故"与"都柏林新建设项目"）
+- 相关但不相同的新闻（如"总理访问"与"总理政策"）
 
 新文章标题: "${newTitle}"
 
 已发布文章标题列表：
 ${existingTitles.map((title, index) => `${index + 1}. ${title}`).join('\n')}
 
-请仔细分析新文章标题与已发布文章列表，判断是否存在重复报道。
+请仔细分析，只有当新文章与列表中某篇文章报道完全相同的事件时才判定为重复。
 
 判断示例：
-- "都柏林房价上涨5%" 与 "爱尔兰首都房产价格持续攀升" → 重复 (相同核心事件)
-- "爱尔兰总理发表声明" 与 "爱尔兰总理谈经济政策" → 不重复 (不同具体内容)
-- "某公司发布财报" 与 "某公司Q1营收增长" → 重复 (相同核心事件)
+- "都柏林市中心发生火灾" 与 "都柏林市中心建筑火灾事故" → 重复 (相同具体事件)
+- "爱尔兰房价上涨5%" 与 "专家分析爱尔兰房价趋势" → 不重复 (不同角度)
+- "政府宣布新经济政策" 与 "政府经济政策获得支持" → 不重复 (不同事件)
+- "苹果公司发布新iPhone" 与 "苹果公司第三季度财报" → 不重复 (不同事件)
+
+要求：宁可误判为不重复，也不要错误地标记为重复。
 
 请只回答 "YES" (重复) 或 "NO" (不重复)。`;
 };
@@ -99,15 +110,35 @@ const getRecentWordPressTitles = async (config) => {
 const isDuplicate = async (articleUrl, aiManager, config) => {
   try {
     const existingTitles = await getRecentWordPressTitles(config);
-    if (existingTitles.length === 0) return false; // 如果没有可比对的标题，则视为不重复
+    if (existingTitles.length === 0) {
+      console.log(`[去重] WordPress中没有文章，视为新文章`);
+      return false; // 如果没有可比对的标题，则视为不重复
+    }
 
-    const { title: newTitle } = await extractNewsFromUrl(articleUrl);
-    const prompt = buildDeduplicationPrompt(newTitle, existingTitles);
+    const { title: newTitle, content: newContent } = await extractNewsFromUrl(articleUrl);
+    
+    // 检查内容提取是否成功
+    if (!newTitle || newTitle.trim().length === 0) {
+      console.log(`[去重] 无法提取文章标题，默认视为新文章`);
+      return false; // 如果无法提取标题，保守处理：视为新文章
+    }
+
+    // 检查标题长度是否合理
+    if (newTitle.trim().length < 10) {
+      console.log(`[去重] 文章标题过短 (${newTitle.length}字符)，默认视为新文章`);
+      return false;
+    }
+
+    const prompt = buildDeduplicationPrompt(newTitle.trim(), existingTitles);
     
     // 使用专门的去重AI引擎
     const aiAgent = aiManager.getAgentForTask('deduplication');
     const response = await aiAgent.processContent(prompt, 'deduplication');
-    return response.trim().toUpperCase() === 'YES';
+    
+    const isRepeated = response.trim().toUpperCase() === 'YES';
+    console.log(`[去重] AI判断结果: ${isRepeated ? '重复' : '新文章'} (标题: ${newTitle.substring(0, 50)}...)`);
+    
+    return isRepeated;
   } catch (error) {
     console.error(`[去重] 检查URL ${articleUrl} 时出错:`, error.message);
     return false; // 出错时默认为不重复，避免错误地过滤掉新文章

@@ -184,9 +184,25 @@ class ExecutionStateManager {
             console.log('🔍 XML-RPC响应片段（前500字符）:');
             console.log(data.substring(0, 500));
 
-            // 检查是否返回空数组（没有文章）
-            if (data.includes('<array><data></data></array>') || data.includes('<array><data>\n</data></array>')) {
-              console.log('📝 WordPress中没有发布的文章，使用24小时前作为基准');
+            // 检查是否返回空文章列表（更严格的检测）
+            // 完全空的数组：<array><data></data></array>
+            // 带换行的空数组：<array><data>\n</data></array>
+            // 检查主要的文章数组是否为空（更精确的方法）
+            const mainArrayMatch = data.match(/<methodResponse>[\s\S]*?<params>[\s\S]*?<param>[\s\S]*?<value>[\s\S]*?<array><data>([\s\S]*?)<\/data><\/array>/);
+            
+            if (mainArrayMatch) {
+              const arrayContent = mainArrayMatch[1].trim();
+              if (arrayContent === '') {
+                console.log('📝 WordPress中没有发布的文章，使用24小时前作为基准');
+                const fallbackTime = new Date(Date.now() - 24 * 60 * 60 * 1000);
+                console.log(`🔄 使用24小时前时间: ${fallbackTime.toISOString()}`);
+                resolve(fallbackTime);
+                return;
+              } else {
+                console.log('✅ WordPress中有文章，继续解析最新文章时间');
+              }
+            } else {
+              console.log('⚠️ 无法解析响应结构，使用降级策略');
               const fallbackTime = new Date(Date.now() - 24 * 60 * 60 * 1000);
               console.log(`🔄 使用24小时前时间: ${fallbackTime.toISOString()}`);
               resolve(fallbackTime);
