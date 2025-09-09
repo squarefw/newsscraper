@@ -10,8 +10,10 @@ const path = require('path');
 const cron = require('node-cron');
 const { spawn } = require('child_process');
 
-// 配置文件路径
-const configFile = process.argv[2] || 'config/config.remote-aliyun.json';
+// 解析命令行参数
+const args = process.argv.slice(2);
+const testMode = args.includes('--test');
+const configFile = args.find(arg => !arg.startsWith('--')) || 'config/config.remote-aliyun.json';
 const urlsFile = 'examples/pending-urls.txt';
 const configPath = path.resolve(configFile);
 
@@ -29,6 +31,9 @@ const CRON_SCHEDULES = {
 console.log('🚀 NewsScraper 统一处理服务启动 (Cron调度)');
 console.log('======================================');
 console.log(`📋 配置文件: ${configPath}`);
+if (testMode) {
+  console.log(`🧪 测试模式: 已启用 - 将立即执行一次任务`);
+}
 console.log('📅 调度计划:');
 console.log(`   🌅 每日完整运行: ${CRON_SCHEDULES.dailyFullRun} (00:00)`);
 console.log('   ⏸️  其他调度任务已暂时禁用');
@@ -53,7 +58,12 @@ async function runDiscovery() {
     console.log(`🔍 [${timestamp}] 开始新闻发现...`);
 
     try {
-        const discovery = spawn('node', ['src/services/discover-and-queue.js', configFile], {
+        const discoveryArgs = ['src/services/discover-and-queue.js', configFile];
+        if (testMode) {
+            discoveryArgs.push('--test');
+        }
+        
+        const discovery = spawn('node', discoveryArgs, {
             stdio: 'inherit',
             cwd: process.cwd()
         });
@@ -284,7 +294,20 @@ process.on('SIGINT', () => {
 });
 
 console.log('✅ 定时任务已设置完成');
-console.log('🔄 服务正在运行，等待定时触发...\n');
+
+// 测试模式：立即执行一次完整流程然后退出
+if (testMode) {
+    console.log('🧪 测试模式：立即执行一次完整流程...\n');
+    runFullProcess().then(() => {
+        console.log('\n🧪 测试模式执行完成，退出服务');
+        process.exit(0);
+    }).catch((error) => {
+        console.error('\n❌ 测试模式执行失败:', error);
+        process.exit(1);
+    });
+} else {
+    console.log('🔄 服务正在运行，等待定时触发...\n');
+}
 
 // 保持进程运行
 setInterval(() => {

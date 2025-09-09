@@ -9,14 +9,16 @@ const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
 
+// 解析命令行参数
+const args = process.argv.slice(2);
+const testMode = args.includes('--test');
+const configFile = args.find(arg => !arg.startsWith('--')) || 'config/config.remote-aliyun.json';
+
 // 配置参数
-const CONFIG_PATH = process.argv[2] || 'config/config.remote-230.json';
 const DISCOVERY_INTERVAL = 30 * 60 * 1000; // 30分钟运行一次发现
 const PROCESSING_INTERVAL = 10 * 60 * 1000; // 10分钟检查一次处理队列
 
-// 解析配置路径
 // 配置文件路径
-const configFile = process.argv[2] || 'config/config.remote-aliyun.json';
 const urlsFile = 'temp/pending-urls.txt';
 const configPath = path.resolve(configFile);
 
@@ -25,6 +27,9 @@ console.log('======================================');
 console.log(`📋 配置文件: ${configPath}`);
 console.log(`🔍 发现间隔: ${DISCOVERY_INTERVAL / 1000 / 60}分钟`);
 console.log(`📝 处理间隔: ${PROCESSING_INTERVAL / 1000 / 60}分钟`);
+if (testMode) {
+  console.log(`🧪 测试模式: 已启用`);
+}
 console.log('======================================\n');
 
 // 运行发现脚本
@@ -32,10 +37,12 @@ async function runDiscovery() {
   return new Promise((resolve, reject) => {
     console.log(`\n🔍 [${new Date().toLocaleString()}] 开始新闻发现...`);
     
-    const child = spawn('node', [
-      path.resolve(__dirname, 'discover-and-queue.js'),
-      configPath
-    ], {
+    const discoveryArgs = [path.resolve(__dirname, 'discover-and-queue.js'), configPath];
+    if (testMode) {
+      discoveryArgs.push('--test');
+    }
+    
+    const child = spawn('node', discoveryArgs, {
       stdio: 'inherit'
     });
 
