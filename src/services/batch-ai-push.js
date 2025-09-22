@@ -12,6 +12,7 @@ const path = require('path');
 const ConfigLoader = require('../config/loader');
 const WordPressConnector = require('../wordpress/wordpressConnector');
 
+
 // 从命令行参数读取配置
 const getConfig = () => {
   const args = process.argv.slice(2);
@@ -380,7 +381,6 @@ async function main() {
     if (!config.wordpress?.enabled || !config.wordpress?.baseUrl || !config.wordpress?.username) {
       throw new Error('WordPress配置不完整。请检查配置文件中的 wordpress 配置段');
     }
-
     console.log('📋 配置信息:');
     console.log(`  AI引擎: ${config.ai.defaultEngine}`);
     console.log(`  WordPress地址: ${config.wordpress.baseUrl}`);
@@ -400,6 +400,16 @@ async function main() {
     // 检测最佳连接方法
     const connectionMethod = await wpConnector.detectBestMethod();
     console.log(`✅ WordPress连接器初始化成功，使用方法: ${connectionMethod.toUpperCase()}\n`);
+
+    // 获取WordPress分类列表
+    console.log('📂 获取WordPress分类列表...');
+    const wpCategories = await wpConnector.getCategories();
+    console.log(`✅ 获取到 ${wpCategories.length} 个分类: ${wpCategories.map(c => c.name).slice(0, 5).join(', ')}${wpCategories.length > 5 ? '...' : ''}`);
+    console.log('📋 完整分类列表:');
+    wpCategories.forEach(cat => {
+      console.log(`   - ${cat.name} (ID: ${cat.id})`);
+    });
+    console.log('');
 
     // 加载AI处理器
     console.log('🤖 加载AI处理器...');
@@ -422,16 +432,6 @@ async function main() {
     }
     console.log();
 
-    // 获取WordPress分类列表（用于AI分类选择）
-    console.log('📂 获取WordPress分类列表...');
-    const wpCategories = await wpConnector.getCategories();
-    console.log(`✅ 获取到 ${wpCategories.length} 个分类: ${wpCategories.map(c => c.name).slice(0, 5).join(', ')}${wpCategories.length > 5 ? '...' : ''}`);
-    console.log('📋 完整分类列表:');
-    wpCategories.forEach(cat => {
-      console.log(`   - ${cat.name} (ID: ${cat.id})`);
-    });
-    console.log('');
-
     // 读取URL列表
     const urls = readUrlsFromFile(urlFile);
     if (urls.length === 0) {
@@ -445,7 +445,6 @@ async function main() {
     const startTime = Date.now();
     let successCount = 0;
     let pushSuccessCount = 0;
-
     for (let i = 0; i < urls.length; i++) {
       const url = urls[i];
       console.log(`\n📄 处理 ${i + 1}/${urls.length}: ${url}`);

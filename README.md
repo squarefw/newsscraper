@@ -1,8 +1,5 @@
 # News Scraper - Production System
 
-[![GitHub](https://img.shields.io/badge/GitHub-squarefw%2Fnewsscraper-blue?logo=github)](https://github.com/squarefw/newsscraper)
-[![Security](https://img.shields.io/badge/Security-API%20Keys%20Protected-green?logo=shield)](docs/API_KEYS_SETUP.md)
-[![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
 
 简化的生产环境新闻发现和AI处理系统。
 
@@ -52,6 +49,7 @@ npm run push      # 内容推送
 ├── tools/production/
 │   ├── discover-and-queue.js    # 新闻发现主程序
 │   └── batch-ai-push.js         # 内容处理推送
+...existing code...
 ├── utils/                       # 核心工具模块
 ├── examples/
 │   └── pending-urls.txt         # URL队列文件
