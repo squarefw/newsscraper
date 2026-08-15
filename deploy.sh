@@ -453,7 +453,7 @@ case "${OPERATION}" in
     *)
         echo "NewsScraper 统一部署脚本"
         echo "  $0 [主机名] [操作]"
-        echo "  $0 weifang@192.168.1.230 deploy"
+        echo "  $0 weifang@8.208.23.37 deploy"
         echo "  $0 deploy  # 使用默认主机"
         echo ""
         echo "操作选项:"

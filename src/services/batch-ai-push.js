@@ -11,6 +11,8 @@ const path = require('path');
 // 引入配置加载器和WordPress连接器
 const ConfigLoader = require('../config/loader');
 const WordPressConnector = require('../wordpress/wordpressConnector');
+const { recordProcessedArticle } = require('../wordpress/wordpressDeduplicator');
+const { extractNewsFromUrl } = require('../article/newsExtractor');
 
 
 // 从命令行参数读取配置
@@ -121,121 +123,7 @@ const removeUrlFromFile = (filePath, urlToRemove) => {
   }
 };
 
-// 从URL提取新闻内容
-const extractNewsFromUrl = async (url) => {
-  console.log(`📡 正在访问: ${url}`);
-  
-  try {
-    const axios = require('axios');
-    const cheerio = require('cheerio');
-    
-    const response = await axios.get(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'Connection': 'keep-alive',
-        'Upgrade-Insecure-Requests': '1'
-      },
-      timeout: 30000
-    });
-
-    const $ = cheerio.load(response.data);
-    let title = '';
-    let content = '';
-    let imageUrl = null;
-
-    // 1. 优先从Meta标签提取图片
-    imageUrl = $('meta[property="og:image"]').attr('content') || $('meta[name="twitter:image"]').attr('content');
-
-    // 尝试多种选择器提取标题
-    const titleSelectors = [
-      'h1',
-      '[data-testid="headline"]',
-      '.story-headline',
-      '.article-headline',
-      '.headline',
-      'title'
-    ];
-
-    for (const selector of titleSelectors) {
-      title = $(selector).first().text().trim();
-      if (title && title.length > 10) break;
-    }
-
-    // 尝试多种选择器提取正文
-    const contentSelectors = [
-      '[data-component="text-block"]',
-      '.story-body__inner',
-      '.article-body',
-      '.content',
-      '.post-content',
-      'article',
-      '.entry-content',
-      'main'
-    ];
-    
-    let $contentElement = null;
-    for (const selector of contentSelectors) {
-      const $el = $(selector);
-      if ($el.length > 0) {
-        $contentElement = $el.first();
-        const paragraphs = $contentElement.find('p');
-        if (paragraphs.length > 0) {
-            content = paragraphs.map((i, el) => $(el).text().trim()).get().join('\n\n');
-            if (content.length > 100) break;
-        }
-      }
-    }
-
-    // 2. 如果Meta标签没有图片，从内容中提取第一张
-    if (!imageUrl && $contentElement) {
-      const firstImg = $contentElement.find('img').first();
-      if (firstImg.length) {
-        imageUrl = firstImg.attr('src');
-      }
-    }
-
-    // 如果没有找到合适的内容，尝试通用方法
-    if (!content || content.length < 100) {
-      content = $('p').map((i, el) => $(el).text().trim())
-        .filter(text => text.length > 20)
-        .slice(0, 10)
-        .join('\n\n');
-    }
-
-    // 清理内容
-    title = title.replace(/\s+/g, ' ').trim();
-    content = content.replace(/\s+/g, ' ').replace(/\n\s*\n/g, '\n\n').trim();
-
-    if (!title || !content) {
-      throw new Error('无法提取有效的新闻内容');
-    }
-
-    // 3. 确保图片URL是绝对路径
-    if (imageUrl) {
-      try {
-        const absoluteUrl = new URL(imageUrl, url).href;
-        imageUrl = absoluteUrl;
-        console.log(`   🖼️ 发现图片: ${imageUrl}`);
-      } catch (e) {
-        console.log(`   ⚠️ 无效的图片URL: ${imageUrl}`);
-        imageUrl = null;
-      }
-    } else {
-      console.log('   🟡 未找到合适的图片');
-    }
-
-    console.log(`   ✅ 提取成功 - 标题: ${title.length}字符, 正文: ${content.length}字符`);
-    console.log(`   📋 标题内容: "${title}"`);
-    console.log(`   📋 正文开头: "${content.substring(0, 200)}..."`);
-    return { title, content, imageUrl };
-  } catch (error) {
-    console.log(`   ❌ 提取失败: ${error.message}`);
-    throw error;
-  }
-};
+// 已移除内部 extractNewsFromUrl，改用外部导入版本
 
 // 最终内容清理函数
 const finalCleanContent = (content, type = 'content') => {
@@ -309,7 +197,7 @@ const pushToWordPressWithConnector = async (processedData, originalUrl, config, 
       title: cleanTitle,
       content: enhancedContent,
       status: config.wordpress.defaultStatus || 'draft',
-      categories: processedData.categoryId ? [processedData.categoryId] : [config.wordpress.defaultCategory || 'Technology'],
+      categories: processedData.categoryId ? [processedData.categoryId] : [],
       excerpt: processedData.summary || '',
       featuredMediaId: featuredMediaId  // 添加特色图片媒体ID
     };
@@ -341,6 +229,16 @@ const pushToWordPressWithConnector = async (processedData, originalUrl, config, 
         }
       }
       
+      try {
+        recordProcessedArticle({
+          title: cleanTitle,
+          url: result.link,
+          sourceUrl: originalUrl
+        });
+      } catch (cacheError) {
+        console.log(`   ⚠️ 去重缓存更新失败: ${cacheError.message}`);
+      }
+
       return {
         success: true,
         response: result,
@@ -419,7 +317,8 @@ async function main() {
     console.log('🚀 创建多AI管理器...');
     const { MultiAIManager } = require('../ai/multiAIManager');
     const multiAIManager = new MultiAIManager(config);
-    console.log('✅ 多AI管理器创建成功');
+    await multiAIManager.initialize();
+    console.log('✅ 多AI管理器初始化成功');
     
     // 显示AI分工情况
     const stats = multiAIManager.getStats();
@@ -440,49 +339,153 @@ async function main() {
 
     console.log(`📝 准备处理 ${urls.length} 个URL\n`);
 
-    // 批量处理
+    // ========== 批处理模式 ==========
+    console.log('🚀 使用批处理模式（2次 AI 调用完成所有文章的翻译+重写+分类）\n');
+
+    // 步骤 1: 提取所有文章内容
+    console.log('📥 步骤 1/4: 提取所有文章内容...');
+    const articlesData = [];
+    for (let i = 0; i < urls.length; i++) {
+      const url = urls[i];
+      process.stdout.write(`   [${i + 1}/${urls.length}] ${url.substring(0, 50)}... `);
+      try {
+        const content = await extractNewsFromUrl(url);
+        articlesData.push({
+          url,
+          title: content.title || '',
+          content: content.content || '',
+          imageUrl: content.imageUrl || null
+        });
+        console.log(`✅ ${content.title?.substring(0, 30) || '(无标题)'}...`);
+      } catch (err) {
+        console.log(`❌ 提取失败: ${err.message}`);
+      }
+    }
+    console.log(`   ✅ 成功提取 ${articlesData.length}/${urls.length} 篇文章\n`);
+
+    if (articlesData.length === 0) {
+      console.log('⚠️ 没有成功提取任何文章，退出');
+      return;
+    }
+
+    // 步骤 2: 批处理翻译
+    console.log('🌐 步骤 2/4: 批处理翻译...');
+    let translatedArticles = [];
+    let useBatchMode = true;
+
+    try {
+      translatedArticles = await aiProcessor.translateArticlesBatch(multiAIManager, articlesData);
+      console.log(`   ✅ 翻译完成: ${translatedArticles.length} 篇文章\n`);
+    } catch (batchError) {
+      console.log(`   ❌ 批处理翻译失败: ${batchError.message}`);
+      console.log('   🔄 降级为逐个处理模式\n');
+      useBatchMode = false;
+    }
+
+    // 步骤 3: 批处理重写+分类
+    let processedArticles = [];
+
+    if (useBatchMode) {
+      console.log('✍️  步骤 3/4: 批处理重写+分类...');
+      try {
+        // 准备输入：翻译后的内容 + 原始英文标题
+        const rewriteInput = translatedArticles.map((translated, index) => ({
+          url: translated.url,
+          translatedTitle: translated.translatedTitle,
+          translatedContent: translated.translatedContent,
+          originalTitle: articlesData[index]?.title || ''
+        }));
+
+        processedArticles = await aiProcessor.rewriteAndCategorizeBatch(multiAIManager, rewriteInput);
+        console.log(`   ✅ 重写+分类完成: ${processedArticles.length} 篇文章\n`);
+      } catch (batchError) {
+        console.log(`   ❌ 批处理重写+分类失败: ${batchError.message}`);
+        console.log('   🔄 降级为逐个处理模式\n');
+        useBatchMode = false;
+      }
+    }
+
+    // 如果批处理失败，降级为逐个处理
+    if (!useBatchMode) {
+      console.log('🔄 降级模式: 逐个处理文章...');
+      processedArticles = [];
+
+      for (const article of articlesData) {
+        try {
+          const essentialTasks = (config.ai.tasks || ['unified_translate_rewrite', 'categorize'])
+            .filter(t => !['article_filter', 'deduplication', 'article_qualification'].includes(t));
+
+          const result = await aiProcessor.processNewsWithAI(
+            multiAIManager,
+            { title: article.title, content: article.content },
+            essentialTasks,
+            wpCategories,
+            config
+          );
+
+          processedArticles.push({
+            url: article.url,
+            rewrittenTitle: result.finalTitle,
+            rewrittenContent: result.finalContent,
+            category: result.category,
+            categoryId: result.categoryId,
+            imageUrl: article.imageUrl
+          });
+        } catch (err) {
+          console.log(`   ❌ 处理失败: ${article.url} - ${err.message}`);
+        }
+      }
+      console.log(`   ✅ 逐个处理完成: ${processedArticles.length} 篇文章\n`);
+    }
+
+    // 步骤 3.5: 将分类名称映射为 WordPress 分类ID（批处理模式只返回分类名称）
+    console.log('🏷️  映射文章分类到 WordPress 分类ID...');
+    for (const article of processedArticles) {
+      if (!article.categoryId && article.category && typeof aiProcessor.validateAndGetCategoryId === 'function') {
+        try {
+          article.categoryId = await aiProcessor.validateAndGetCategoryId(
+            article.category,
+            wpCategories,
+            config.wordpress?.categoryConstraints?.fallbackCategory || '未分类'
+          );
+          console.log(`   🏷️  "${article.category}" -> 分类ID ${article.categoryId}`);
+        } catch (err) {
+          console.log(`   ⚠️ 分类映射失败: ${article.category} - ${err.message}`);
+        }
+      }
+    }
+
+    // 步骤 4: 发布到 WordPress
+    console.log('📤 步骤 4/4: 发布到 WordPress...');
     const results = [];
     const startTime = Date.now();
     let successCount = 0;
     let pushSuccessCount = 0;
-    for (let i = 0; i < urls.length; i++) {
-      const url = urls[i];
-      console.log(`\n📄 处理 ${i + 1}/${urls.length}: ${url}`);
+
+    for (let i = 0; i < processedArticles.length; i++) {
+      const article = processedArticles[i];
+      const url = article.url;
+      console.log(`\n📄 发布 ${i + 1}/${processedArticles.length}: ${article.rewrittenTitle?.substring(0, 40) || '(无标题)'}...`);
       console.log('─'.repeat(80));
-      
+
       const urlStartTime = Date.now();
-      
+
       try {
-        // 提取新闻内容
-        const originalContent = await extractNewsFromUrl(url);
-        
-        // AI处理（使用统一处理器）
-        let aiProcessResult;
-        console.log('🤖 开始AI处理...');
-        
-        try {
-          console.log('   使用AI处理器（含WordPress分类约束）');
-          aiProcessResult = await aiProcessor.processNewsWithAI(
-            multiAIManager, 
-            originalContent, 
-            config.ai.tasks || ['translate', 'rewrite', 'categorize'], 
-            wpCategories, // 使用已经获取的WordPress分类
-            config
-          );
-          
-          console.log('   ✅ AI处理完成');
-          
-        } catch (aiError) {
-          console.log(`   ❌ AI处理错误: ${aiError.message}`);
-          throw new Error(`AI处理失败: ${aiError.message}`);
-        }
+        // 准备 AI 处理结果（适配现有结构）
+        const aiProcessResult = {
+          finalTitle: article.rewrittenTitle,
+          finalContent: article.rewrittenContent,
+          category: article.category,
+          categoryId: article.categoryId
+        };
 
         // 图片上传处理
         let featuredMediaId = null;
-        if (originalContent.imageUrl) {
+        const originalArticle = articlesData.find(a => a.url === url);
+        if (originalArticle?.imageUrl) {
           console.log('🖼️ 开始处理特色图片...');
           try {
-            const uploadResult = await wpConnector.uploadImageFromUrl(originalContent.imageUrl);
+            const uploadResult = await wpConnector.uploadImageFromUrl(originalArticle.imageUrl);
             if (uploadResult.success) {
               featuredMediaId = uploadResult.mediaId;
               console.log(`   ✅ 特色图片设置成功，媒体ID: ${featuredMediaId}`);
@@ -495,12 +498,12 @@ async function main() {
         } else {
           console.log('   🟡 本文无特色图片');
         }
-        
-        // 使用新WordPress连接器推送
+
+        // 推送到 WordPress
         const pushResult = await pushToWordPressWithConnector(aiProcessResult, url, config, wpConnector, featuredMediaId);
-        
+
         const urlDuration = Date.now() - urlStartTime;
-        
+
         results.push({
           url,
           success: true,
@@ -508,35 +511,33 @@ async function main() {
           aiProcessResult,
           pushResult
         });
-        
+
         successCount++;
         if (pushResult.success) {
           pushSuccessCount++;
         }
-        
-        console.log(`✅ URL处理完成 (${urlDuration}ms) - 推送${pushResult.success ? '成功' : '失败'}`);
-        
-        // 无论推送是否成功，都从队列文件中移除已处理的URL
+
+        console.log(`✅ 发布完成 (${urlDuration}ms) - ${pushResult.success ? '成功' : '失败'}`);
+
+        // 从队列文件中移除已处理的URL
         removeUrlFromFile(urlFile, url);
-        
+
       } catch (error) {
         const urlDuration = Date.now() - urlStartTime;
-        
+
         results.push({
           url,
           success: false,
           duration: urlDuration,
           error: error.message
         });
-        
-        console.log(`❌ URL处理失败: ${error.message} (${urlDuration}ms)`);
-        
-        // 即使处理失败，也从队列文件中移除，避免重复处理失败的URL
+
+        console.log(`❌ 发布失败: ${error.message} (${urlDuration}ms)`);
         removeUrlFromFile(urlFile, url);
       }
-      
+
       // 添加延迟避免请求过快
-      if (i < urls.length - 1) {
+      if (i < processedArticles.length - 1) {
         console.log('⏱️  等待3秒后继续...');
         await new Promise(resolve => setTimeout(resolve, 3000));
       }
@@ -546,16 +547,17 @@ async function main() {
 
     // 显示最终结果
     console.log('\n' + '='.repeat(80));
-    console.log('🎉 批量处理完成！');
+    console.log('🎉 批处理完成！');
     console.log('='.repeat(80));
     console.log(`📊 处理统计:`);
-    console.log(`   ✅ 成功处理: ${successCount}/${urls.length} (${((successCount/urls.length)*100).toFixed(1)}%)`);
-    console.log(`   ❌ 处理失败: ${urls.length - successCount}/${urls.length}`);
-    console.log(`📊 推送统计:`);
-    console.log(`   ✅ 推送成功: ${pushSuccessCount}/${successCount} (${successCount > 0 ? ((pushSuccessCount/successCount)*100).toFixed(1) : 0}%)`);
-    console.log(`   ❌ 推送失败: ${successCount - pushSuccessCount}/${successCount}`);
+    console.log(`   🚀 处理模式: ${useBatchMode ? '批处理 (2次 AI 调用)' : '逐个处理 (降级模式)'}`);
+    console.log(`   📥 提取成功: ${articlesData.length}/${urls.length}`);
+    console.log(`   ✅ 处理成功: ${processedArticles.length}/${articlesData.length}`);
+    console.log(`   📤 发布成功: ${pushSuccessCount}/${processedArticles.length}`);
     console.log(`⏱️  总耗时: ${Math.round(totalDuration/1000)}秒`);
-    console.log(`📈 平均处理时间: ${Math.round(totalDuration/urls.length/1000)}秒/URL`);
+    if (processedArticles.length > 0) {
+      console.log(`📈 平均处理时间: ${Math.round(totalDuration/processedArticles.length/1000)}秒/篇`);
+    }
 
     // 显示推送成功的文章信息
     const successfulPushes = results.filter(r => r.success && r.pushResult?.success);

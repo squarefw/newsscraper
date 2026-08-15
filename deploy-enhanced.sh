@@ -61,7 +61,7 @@ check_enhanced_files() {
     echo_step "检查增强版文件..."
     
     local files=(
-        "utils/puppeteerResolver_enhanced.js"
+        "src/browser/puppeteerResolver_enhanced.js"
         "temp/docker-test.js"
         "Dockerfile"
         "docker-compose.arm.yml"
@@ -86,7 +86,7 @@ create_deploy_package() {
     
     # 复制核心文件
     echo_info "复制核心增强文件..."
-    cp utils/puppeteerResolver_enhanced.js temp/deploy-package/
+    cp src/browser/puppeteerResolver_enhanced.js temp/deploy-package/
     cp temp/docker-test.js temp/deploy-package/
     cp Dockerfile temp/deploy-package/
     cp docker-compose.arm.yml temp/deploy-package/
@@ -124,8 +124,8 @@ backup_remote_files() {
         BACKUP_DIR="backups/\$(date +%Y%m%d_%H%M%S)"
         
         # 备份关键文件
-        if [ -f "utils/puppeteerResolver_enhanced.js" ]; then
-            cp utils/puppeteerResolver_enhanced.js \$BACKUP_DIR/
+        if [ -f "src/browser/puppeteerResolver_enhanced.js" ]; then
+            cp src/browser/puppeteerResolver_enhanced.js \$BACKUP_DIR/
             echo "已备份: puppeteerResolver_enhanced.js"
         fi
         
@@ -154,7 +154,7 @@ deploy_enhanced_files() {
     
     # 传输核心增强文件
     echo_info "传输增强版解析器..."
-    scp utils/puppeteerResolver_enhanced.js ${REMOTE_HOST}:${DEPLOY_DIR}/utils/
+    scp src/browser/puppeteerResolver_enhanced.js ${REMOTE_HOST}:${DEPLOY_DIR}/utils/
     
     echo_info "传输Docker测试脚本..."
     scp temp/docker-test.js ${REMOTE_HOST}:${DEPLOY_DIR}/temp/
@@ -407,7 +407,7 @@ case "${OPERATION}" in
     *)
         echo "增强版部署脚本使用方法:"
         echo "  $0 [主机名] [操作]"
-        echo "  $0 weifang@192.168.1.230 deploy"
+        echo "  $0 weifang@8.208.23.37 deploy"
         echo "  $0 deploy  # 使用默认主机"
         echo ""
         echo "操作选项:"

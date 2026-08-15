@@ -1,7 +1,11 @@
 /**
  * WordPress 内容去重模块
- * 使用AI判断新发现的文章是否已在WordPress中存在
+ * 使用AI判断新发现的文章是否与当前运行中已处理的文章重复
  */
+
+const fs = require('fs');
+const path = require('path');
+const { extractNewsFromUrl } = require('../article/newsExtractor');
 
 /**
  * 构建用于去重判断的AI Prompt
@@ -40,68 +44,89 @@ ${existingTitles.map((title, index) => `${index + 1}. ${title}`).join('\n')}
 请只回答 "YES" (重复) 或 "NO" (不重复)。`;
 };
 
-const WordPressConnector = require('./wordpressConnector');
-const { extractNewsFromUrl } = require('../article/newsExtractor');
+const storageDir = path.resolve(__dirname, '../../temp');
+const storageFile = path.join(storageDir, 'processed-articles.json');
 
-let titleCache = null;
-let cacheTimestamp = 0;
-
-/**
- * 从WordPress获取最新文章的标题列表（带缓存）
- */
-const getRecentWordPressTitles = async (config) => {
-  const { deduplication } = config.discovery;
-  const { wordpress } = config; // WordPress配置在根级别
-  const now = Date.now();
-
-  // 检查缓存
-  if (titleCache && (now - cacheTimestamp) < deduplication.cacheDuration) {
-    console.log(`[去重] 使用缓存的 ${titleCache.length} 个WordPress标题。`);
-    return titleCache;
+const ensureStorageReady = () => {
+  if (!fs.existsSync(storageDir)) {
+    fs.mkdirSync(storageDir, { recursive: true });
   }
-
-  console.log('[去重] 正在从WordPress获取最新文章标题...');
-  try {
-    // 使用WordPressConnector而不是直接调用axios
-    const wpConnector = new WordPressConnector(wordpress);
-    
-    // 获取最近的文章标题
-    const posts = await wpConnector.getRecentPosts(deduplication.recentPostsCount || 50);
-    
-    const titles = posts.map(post => post.title);
-    titleCache = titles;
-    cacheTimestamp = now;
-    console.log(`[去重] 成功获取 ${titles.length} 个标题并已缓存。`);
-    return titles;
-  } catch (error) {
-    console.error('[去重] 获取WordPress标题失败:', error.message);
-    
-    // 如果是401错误，提供更详细的错误信息
-    if (error.message.includes('401') || error.message.includes('UNAUTHORIZED')) {
-      console.error('[去重] ❌ WordPress认证失败，可能原因：');
-      console.error('  1. 用户名或密码错误');
-      console.error('  2. 用户权限不足');
-      console.error('  3. WordPress禁用了REST API和XML-RPC');
-      console.error('  4. WordPress需要Application Password认证');
-    }
-    
-    return []; // 失败时返回空数组，避免阻塞流程
+  if (!fs.existsSync(storageFile)) {
+    fs.writeFileSync(storageFile, JSON.stringify({ articles: [] }, null, 2), 'utf8');
   }
 };
 
-/**
- * 构建用于去重判断的AI Prompt
- */
-/**
- * 检查指定URL的文章是否与WordPress中的文章重复
- * @param {string} articleUrl - 待检查的文章URL
- * @param {MultiAIManager} aiManager - AI管理器实例
- * @param {object} config - 完整的配置对象
- * @returns {Promise<boolean>} - 如果重复则返回true，否则返回false
- */
+const normalizeTitle = (title = '') => title.replace(/\s+/g, ' ').trim().toLowerCase();
+
+const readProcessedArticles = () => {
+  ensureStorageReady();
+  try {
+    const raw = fs.readFileSync(storageFile, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed.articles)) {
+      return parsed.articles;
+    }
+    return [];
+  } catch (error) {
+    console.warn('[去重] 无法读取已处理文章缓存，使用空列表:', error.message);
+    return [];
+  }
+};
+
+const writeProcessedArticles = (articles) => {
+  ensureStorageReady();
+  const payload = {
+    updatedAt: new Date().toISOString(),
+    articles: articles
+  };
+  fs.writeFileSync(storageFile, JSON.stringify(payload, null, 2), 'utf8');
+};
+
+const getProcessedArticles = () => readProcessedArticles();
+
+const getProcessedTitles = (articles = getProcessedArticles()) => {
+  const unique = new Map();
+  articles.forEach(article => {
+    if (!article || !article.title) return;
+    const normalized = normalizeTitle(article.title);
+    if (!unique.has(normalized)) {
+      unique.set(normalized, article.title);
+    }
+  });
+  return Array.from(unique.values());
+};
+
+const recordProcessedArticle = ({ title, url, sourceUrl }) => {
+  if (!title) return;
+  const normalizedTitle = normalizeTitle(title);
+  if (!normalizedTitle) return;
+
+  const articles = getProcessedArticles();
+  const exists = articles.some(item => item.normalizedTitle === normalizedTitle);
+  if (exists) {
+    return;
+  }
+
+  const entry = {
+    title,
+    normalizedTitle,
+    url: url || null,
+    sourceUrl: sourceUrl || null,
+    processedAt: new Date().toISOString()
+  };
+
+  const updated = [...articles, entry];
+  writeProcessedArticles(updated);
+  console.log(`[去重] 已缓存文章标题: ${title}`);
+};
+
+const resetProcessedArticles = () => {
+  writeProcessedArticles([]);
+  console.log('[去重] 已重置本次运行的已处理文章缓存');
+};
 
 /**
- * 检查指定URL的文章是否与WordPress中的文章重复
+ * 检查指定URL的文章是否与已处理文章重复
  * @param {string} articleUrl - 待检查的文章URL
  * @param {MultiAIManager} aiManager - AI管理器实例
  * @param {object} config - 完整的配置对象
@@ -109,40 +134,52 @@ const getRecentWordPressTitles = async (config) => {
  */
 const isDuplicate = async (articleUrl, aiManager, config) => {
   try {
-    const existingTitles = await getRecentWordPressTitles(config);
-    if (existingTitles.length === 0) {
-      console.log(`[去重] WordPress中没有文章，视为新文章`);
-      return false; // 如果没有可比对的标题，则视为不重复
-    }
+    const { title: newTitle } = await extractNewsFromUrl(articleUrl);
 
-    const { title: newTitle, content: newContent } = await extractNewsFromUrl(articleUrl);
-    
-    // 检查内容提取是否成功
     if (!newTitle || newTitle.trim().length === 0) {
       console.log(`[去重] 无法提取文章标题，默认视为新文章`);
-      return false; // 如果无法提取标题，保守处理：视为新文章
+      return false;
     }
 
-    // 检查标题长度是否合理
     if (newTitle.trim().length < 10) {
       console.log(`[去重] 文章标题过短 (${newTitle.length}字符)，默认视为新文章`);
       return false;
     }
 
+    const normalizedNewTitle = normalizeTitle(newTitle);
+    const processedArticles = getProcessedArticles();
+
+    if (processedArticles.length === 0) {
+      console.log('[去重] 当前缓存为空，视为新文章');
+      return false;
+    }
+
+    const hasExactMatch = processedArticles.some(article => article.normalizedTitle === normalizedNewTitle);
+    if (hasExactMatch) {
+      console.log(`[去重] 标题与已处理文章完全匹配，判定为重复: ${newTitle.substring(0, 50)}...`);
+      return true;
+    }
+
+    const existingTitles = getProcessedTitles(processedArticles);
     const prompt = buildDeduplicationPrompt(newTitle.trim(), existingTitles);
-    
-    // 使用专门的去重AI引擎
+
     const aiAgent = aiManager.getAgentForTask('deduplication');
     const response = await aiAgent.processContent(prompt, 'deduplication');
-    
+
     const isRepeated = response.trim().toUpperCase() === 'YES';
     console.log(`[去重] AI判断结果: ${isRepeated ? '重复' : '新文章'} (标题: ${newTitle.substring(0, 50)}...)`);
-    
+
     return isRepeated;
   } catch (error) {
     console.error(`[去重] 检查URL ${articleUrl} 时出错:`, error.message);
-    return false; // 出错时默认为不重复，避免错误地过滤掉新文章
+    return false;
   }
 };
 
-module.exports = { isDuplicate };
+module.exports = {
+  isDuplicate,
+  recordProcessedArticle,
+  resetProcessedArticles,
+  getProcessedArticles,
+  getProcessedTitles
+};

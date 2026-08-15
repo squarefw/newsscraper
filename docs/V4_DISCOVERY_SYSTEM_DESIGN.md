@@ -25,7 +25,7 @@
 
 | 需求ID | 需求名称 | 详细描述 |
 | :--- | :--- | :--- |
-| **FR-01** | **可配置的新闻源监控** | 系统必须允许用户在中心配置文件（如 `config.remote-230.json`）中定义一个或多个新闻源。每个新闻源应包含其名称（如"BBC"）、列表页URL和一组相关的监控关键词（如"technology", "ireland"）。 |
+| **FR-01** | **可配置的新闻源监控** | 系统必须允许用户在中心配置文件（如 `config.remote-aliyun.json`）中定义一个或多个新闻源。每个新闻源应包含其名称（如"BBC"）、列表页URL和一组相关的监控关键词（如"technology", "ireland"）。 |
 | **FR-02** | **AI驱动的新闻链接发现** | 系统需要能够抓取FR-01中配置的新闻源列表页HTML。随后，调用AI模型分析该HTML，并根据链接文本和上下文，提取出所有与指定关键词高度相关的新闻文章的完整URL。 |
 | **FR-03** | **AI驱动的内容去重** | 对于FR-02中发现的每一个新链接，系统必须执行去重检查。此过程包括：1) 提取新文章的标题。2) 获取WordPress网站最近发布的文章标题列表。3) 调用AI模型，判断新文章与已有文章是否报道同一核心事件。 |
 | **FR-04** | **自动化任务队列生成** | 系统必须将所有通过FR-03去重检查的、确认是全新的新闻链接，写入到一个指定的文本文件（如 `examples/pending-urls.txt`）中。此文件将作为后续处理阶段的任务队列。 |
@@ -66,12 +66,25 @@ graph TD
 3.  **WordPress去重模块: `utils/wordpressDeduplicator.js`**
     *   **职责**: 封装与WordPress交互和AI比对去重的逻辑。它将接收一个待检测的URL，并返回一个布尔值（是否重复）。该模块应包含对WordPress文章列表的缓存机制，以优化性能。
 
+### 3.3 Google News URL 解码架构 (新增)
+
+针对 Google News 源的特殊加密 URL (`news.google.com/rss/articles/...`)，系统实现了三级混合解码防护架构，确保 100% 的解析成功率，同时最小化资源消耗。
+
+1. **第一重：JS 快速匹配解码 (Offline Fast-Path)**
+    - **职责**: 针对部分特定格式的编码 URL，直接在 Node.js 内存中通过 Base64 及特征码截断进行极速解码，无需任何网络请求，耗时为 0ms。
+2. **第二重：Python 桥接秒解 (Native TLS Bypass)**
+    - **职责**: 对于必须通过网络获取额外签名才能解码的最新协议，系统会通过 `child_process` 唤起本地自带的 `googlenewsdecoder` Python 环境。
+    - **优势**: 完美绕开了 Node.js 环境下易被拦截的 TLS 指纹问题，直接向 Google 内部 `batchexecute` 接口发送特征数据包进行“盲解”，极速返回真实 URL 且免受 429 频率限制。
+3. **第三重：Puppeteer 真实模拟兜底 (Heavy Fallback)**
+    - **职责**: 如果前两种方案遇到阻碍或特殊未知错误，系统会仅对报错的极少数 URL 拉起 `puppeteer-extra-plugin-stealth` 环境。
+    - **优势**: 通过全真模拟人类行为，点击 Cookie 同意页面并跟踪网络重定向，确保在任何服务端改版情况下的最终容灾成功率。
+
 ---
 
 ## 4. 技术方案细节
 
 ### 4.1 配置文件设计
-在 `config/config.remote-230.json` 文件中增加 `discovery` 配置段：
+在 `config/config.remote-aliyun.json` 文件中增加 `discovery` 配置段：
 
 ```json
 {
@@ -183,7 +196,7 @@ async function main() {
   console.log('=============================================\n');
 
   try {
-    const configPath = path.resolve(__dirname, '../../config/config.remote-230.json');
+    const configPath = path.resolve(__dirname, '../../config/config.remote-aliyun.json');
     const config = loadConfig(configPath);
 
     if (!config.discovery?.enabled) {

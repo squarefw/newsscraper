@@ -41,7 +41,7 @@ config/category-backup.json      # 自动生成的分类备份
 {
   "wordpress": {
     "enabled": true,
-    "baseUrl": "http://192.168.1.230:8080",
+    "baseUrl": "http://8.208.23.37:8080",
     "username": "admin",
     "password": "YOUR_PASSWORD"
   }
@@ -64,7 +64,7 @@ config/category-backup.json      # 自动生成的分类备份
 ### 1. 基本使用（批量处理脚本）
 ```bash
 # 脚本会自动获取远程分类
-node tools/batch-ai-push.js config/config.remote-230.json urls.txt
+node tools/batch-ai-push.js config/config.remote-aliyun.json urls.txt
 ```
 
 ### 2. 手动获取分类信息

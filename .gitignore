@@ -93,3 +93,7 @@ examples/*
 .browser_cache/
 screenshots/
 *.har
+
+# UCD folder
+UCD/
+.gstack/

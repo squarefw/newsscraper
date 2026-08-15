@@ -15,7 +15,12 @@ RUN apk add --no-cache \
     font-noto-extra \
     wqy-zenhei \
     dbus-x11 \
+    python3 \
+    py3-pip \
     && rm -rf /var/cache/apk/*
+
+# 安装 Python 库
+RUN python3 -m pip install googlenewsdecoder --break-system-packages
 
 # 创建应用目录
 WORKDIR /app

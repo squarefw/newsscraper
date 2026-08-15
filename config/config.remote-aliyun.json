@@ -12,20 +12,20 @@
         "siteUrl": "http://8.208.23.37",
         "username": "FROM_API_KEYS_CONFIG",
         "password": "FROM_API_KEYS_CONFIG",
-        "defaultStatus": "draft",
+        "defaultStatus": "publish",
         "defaultCategory": "Technology",
         "apiMethod": "auto",
         "categoryConstraints": {
             "enabled": true,
             "allowNewCategories": false,
-            "fallbackCategory": "\u672a\u5206\u7c7b",
+            "fallbackCategory": "未分类",
             "cacheDuration": 3600000
         },
         "contentEnhancement": {
             "addSourceLink": true,
-            "sourceLinkTemplate": "\n\n\u6765\u6e90\u94fe\u63a5: {title} ({url})",
+            "sourceLinkTemplate": "\n\n来源链接: {title} ({url})",
             "addPublishDate": true,
-            "publishDateTemplate": "\n\n\u53d1\u5e03\u65f6\u95f4: {date}"
+            "publishDateTemplate": "\n\n发布时间: {date}"
         }
     },
     "ai": {
@@ -35,14 +35,16 @@
         "taskEngines": {
             "translate": "qwen",
             "rewrite": "qwen",
-            "summarize": "siliconflow",
-            "extract_keywords": "siliconflow",
-            "categorize": "siliconflow",
-            "sentiment": "siliconflow",
+            "summarize": "qwen",
+            "extract_keywords": "qwen",
+            "categorize": "qwen",
+            "sentiment": "qwen",
             "custom_title_translate": "qwen",
             "custom_title_generate": "qwen",
             "article_filter": "qwen",
-            "deduplication": "qwen"
+            "article_qualification": "qwen",
+            "deduplication": "qwen",
+            "unified_translate_rewrite": "qwen"
         },
         "fallbackStrategy": "useDefault",
         "engines": {
@@ -109,8 +111,7 @@
             }
         },
         "tasks": [
-            "translate",
-            "rewrite",
+            "unified_translate_rewrite",
             "categorize",
             "article_filter",
             "deduplication"
@@ -118,16 +119,16 @@
     },
     "filter": {
         "keywords": [
-            "\u90fd\u67cf\u6797",
-            "\u7231\u5c14\u5170",
-            "\u7231\u5c14\u5170\u4eba",
-            "\u7231\u5c14\u5170\u65b0\u95fb",
+            "都柏林",
+            "爱尔兰",
+            "爱尔兰人",
+            "爱尔兰新闻",
             "ireland",
             "irish",
             "dublin",
-            "\u79d1\u6280",
-            "\u65b0\u95fb",
-            "\u8d44\u8baf"
+            "科技",
+            "新闻",
+            "资讯"
         ]
     },
     "testMode": true,
@@ -166,6 +167,5 @@
             "bufferMinutes": 10,
             "cacheMinutes": 5
         }
-    },
-    "defaultEngine": "qwen"
+    }
 }

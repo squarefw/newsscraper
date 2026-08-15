@@ -6,7 +6,7 @@
 
 ## 配置位置
 
-配置文件：`config/config.remote-230.json`
+配置文件：`config/config.remote-aliyun.json`
 
 ## AI任务配置
 

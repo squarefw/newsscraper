@@ -2,7 +2,7 @@
 
 # 远程部署状态查看脚本
 
-REMOTE_HOST="${1:-weifang@192.168.1.230}"
+REMOTE_HOST="${1:-weifang@8.208.23.37}"
 DEPLOY_DIR="/home/weifang/newsscraper"
 
 echo "========================================"

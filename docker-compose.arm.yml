@@ -29,7 +29,7 @@ services:
     security_opt:
       - seccomp:unconfined
     # 使用cron调度的统一服务脚本
-    command: ["node", "tools/production/unified-service-cron.js", "config/config.remote-aliyun.json"]
+    command: ["node", "src/services/unified-service-cron.js", "config/config.remote-aliyun.json"]
     # 提高资源配置以支持高级反检测
     deploy:
       resources:
@@ -40,31 +40,6 @@ services:
           memory: 1G
           cpus: '0.5'
 
-  # Web 质量测试工具（可选）
-  web-quality-tester:
-    image: newsscraper:latest
-    container_name: newsscraper-web-tester
-    restart: unless-stopped
-    ports:
-      - "3000:3000"
-    environment:
-      - NODE_ENV=production
-      - TZ=Europe/Dublin
-    env_file:
-      - .env
-    volumes:
-      - ./config:/app/config:ro
-      - ./tools/web-quality-tester:/app/tools/web-quality-tester:ro
-      - ./logs:/app/logs
-    networks:
-      - newsscraper-network
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-          cpus: '0.3'
-    working_dir: /app/tools/web-quality-tester
-    command: ["node", "server.js"]
 
 volumes:
   newsscraper_data:

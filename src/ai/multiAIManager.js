@@ -89,7 +89,7 @@ class MultiAIManager {
       const fs = require('fs');
       const path = require('path');
       
-      const promptConfigPath = path.join(__dirname, '../config/ai-prompts.json');
+      const promptConfigPath = path.join(__dirname, '../../config/ai-prompts.json');
       
       const promptConfigContent = fs.readFileSync(promptConfigPath, 'utf8');
       const promptConfig = JSON.parse(promptConfigContent);
@@ -261,6 +261,7 @@ class MultiAIManager {
    * 清理AI输出，移除思考标签和多余内容
    */
   cleanAIOutput(content, task = null) {
+    if (task === 'unified_translate_rewrite') return content;
     if (!content || typeof content !== 'string') {
       return content;
     }
@@ -603,13 +604,24 @@ class MultiAIManager {
   /**
    * 获取任务对应的prompt
    */
-  getPromptForTask(content, task) {
+  /**
+   * 支持多占位符模板：传 {title, content} 对象可同时替换 {title} 和 {content}
+   */
+  getPromptForTask(contentOrParams, task) {
     // 优先使用加载的高质量prompt配置
     if (this.prompts && this.prompts[task] && this.prompts[task].template) {
-      return this.prompts[task].template.replace('{content}', content);
+      let template = this.prompts[task].template;
+      // 支持 multi-placeholder 模板（{title} + {content}）
+      if (typeof contentOrParams === 'object' && contentOrParams !== null && !Array.isArray(contentOrParams)) {
+        const { title = '', content = '' } = contentOrParams;
+        return template.replace('{title}', title).replace('{content}', content);
+      }
+      // 单占位符（向后兼容）
+      return template.replace('{content}', contentOrParams);
     }
     
     // 如果没有加载到配置，使用简化版本作为后备
+    const content = (typeof contentOrParams === 'object' && contentOrParams !== null) ? contentOrParams.content : contentOrParams;
     const fallbackPrompts = {
       translate: `请将以下英文新闻翻译成中文：\n\n${content}`,
       rewrite: `请重写以下新闻内容：\n\n${content}`,

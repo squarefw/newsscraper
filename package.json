@@ -4,7 +4,7 @@
   "description": "Automated news content scraper with AI optimization and API integration.",
   "main": "src/services/batch-ai-push.js",
   "scripts": {
-    "start": "node src/services/batch-ai-push.js config/config.remote-230.json examples/wordpress-test-urls.txt",
+    "start": "node src/services/batch-ai-push.js config/config.remote-aliyun.json examples/wordpress-test-urls.txt",
     "discover": "node src/services/discover-and-queue.js",
     "service": "node src/services/unified-service.js",
     "cron": "node src/services/unified-service-cron.js"
@@ -26,7 +26,7 @@
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
-    "axios": "^1.11.0",
+    "axios": "^1.13.6",
     "cheerio": "^1.1.2",
     "dotenv": "^16.0.0",
     "node-cron": "^3.0.0",
@@ -36,6 +36,7 @@
     "puppeteer": "^24.17.0",
     "puppeteer-extra": "^3.3.6",
     "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "turndown": "^7.2.2",
     "winston": "^3.8.2",
     "xml2js": "^0.6.2"
   }

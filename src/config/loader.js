@@ -43,7 +43,7 @@ class ConfigLoader {
   /**
    * 加载配置文件并自动注入API密钥
    * @param {string} configPath 配置文件路径
-   * @param {string} environment 环境标识符 (如: remote-230, remote-aliyun)
+   * @param {string} environment 环境标识符 (如: remote-aliyun)
    * @returns {Object} 合并后的配置对象
    */
   loadConfig(configPath, environment) {
@@ -91,7 +91,7 @@ class ConfigLoader {
    */
   inferEnvironment(configPath) {
     const filename = path.basename(configPath, '.json');
-    if (filename.includes('remote-230')) return 'remote-230';
+
     if (filename.includes('remote-aliyun')) return 'remote-aliyun';
     if (filename.includes('development')) return 'development';
     if (filename.includes('production')) return 'production';

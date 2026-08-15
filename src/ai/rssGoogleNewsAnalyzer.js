@@ -1,9 +1,7 @@
 const https = require('https');
 const cheerio = require('cheerio');
-const { 
-  getOriginalNewsLinksFromTopic, 
-  debugDecodeUrl 
-} = require('../browser/puppeteerResolver_enhanced');
+const GoogleNewsDecoder = require('../utils/googleNewsDecoder');
+const { fetchUrlWithPuppeteer } = require('../browser/puppeteerResolver_enhanced');
 
 /**
  * 全新的基于RSS的Google News源分析器
@@ -188,20 +186,18 @@ class RSSGoogleNewsAnalyzer {
     try {
       const { testMode = false } = options;
       console.log(`🚀 开始处理Google News URL: ${htmlUrl}`);
-      if (testMode) {
+      
+      const rssData = await this.fetchRSSFeed(htmlUrl);
+      let articles = this.parseRSSFeed(rssData);
+      articles = this.filterByDate(articles);
+      
+      if (testMode && articles.length > 5) {
         console.log(`🧪 测试模式：将限制URL解码数量为5个`);
+        articles = articles.slice(0, 5);
       }
       
-      // 使用增强版解析器直接获取原始链接
-      console.log(`🔧 使用简化解析器解码URL...`);
-      const articleItems = await getOriginalNewsLinksFromTopic(htmlUrl, {
-        enablePuppeteer: true, // 启用Puppeteer作为备用方案
-        testMode: testMode     // 传递测试模式
-      });
-      
-      if (articleItems.length === 0) {
-        console.log(`❌ 简化解析器未获取到任何链接`);
-        
+      if (articles.length === 0) {
+        console.log(`❌ 未获取到任何相关文章链接`);
         return {
           sourceUrl: htmlUrl,
           totalFound: 0,
@@ -209,38 +205,55 @@ class RSSGoogleNewsAnalyzer {
           processed: 0,
           articles: [],
           success: false,
-          method: 'Enhanced_Resolver',
+          method: 'RSS_Decoder',
           error: 'No links found'
         };
       }
       
-      // 转换为article格式，保留时间戳信息
-      const articles = articleItems.map((item, index) => {
-        let articleDate;
-        let articleUrl;
-        
-        if (typeof item === 'string') {
-          // 如果是字符串，说明是旧格式，使用当前时间
-          articleUrl = item;
-          articleDate = new Date();
-        } else {
-          // 如果是对象，使用时间戳信息
-          articleUrl = item.url;
-          articleDate = item.date || new Date();
-        }
-        
-        return {
-          title: `新闻文章 ${index + 1}`,
-          url: articleUrl,
-          date: articleDate,
-          source: this.extractSourceFromUrl(articleUrl),
-          originalUrl: articleUrl // 标记这是已解码的原始URL
-        };
-      });
+      const decoder = new GoogleNewsDecoder();
+      console.log(`🔧 解码 ${articles.length} 个Google News URL...`);
+      const decodeResults = await decoder.decodeBatch(articles.map(a => a.url));
       
-      console.log(`\n📋 增强版解析器最终结果: ${articles.length} 个原始链接`);
+      const resolvedArticles = [];
+      const failedArticles = [];
+      for (let i = 0; i < decodeResults.length; i++) {
+          const res = decodeResults[i];
+          if (res.status && res.url) {
+              const article = articles[i];
+              resolvedArticles.push({
+                  title: article.title,
+                  url: res.url,
+                  date: article.date,
+                  source: article.source || this.extractSourceFromUrl(res.url),
+                  originalUrl: res.url,
+                  description: article.description
+              });
+          } else {
+              failedArticles.push(articles[i]);
+          }
+      }
       
-      articles.forEach((article, i) => {
+      // Fallback: 如果有失败的链接，尝试使用 Puppeteer 获取原始链接
+      if (failedArticles.length > 0 && options.enablePuppeteer !== false) {
+          console.log(`\n🎭 ${failedArticles.length} 个链接解码失败，尝试使用 Puppeteer Fallback...`);
+          for (const failedArticle of failedArticles) {
+              const puppeteerUrls = await fetchUrlWithPuppeteer(failedArticle.url, { timeout: 30000 });
+              if (puppeteerUrls && puppeteerUrls.length > 0) {
+                  resolvedArticles.push({
+                      title: failedArticle.title,
+                      url: puppeteerUrls[0],
+                      date: failedArticle.date,
+                      source: failedArticle.source || this.extractSourceFromUrl(puppeteerUrls[0]),
+                      originalUrl: puppeteerUrls[0],
+                      description: failedArticle.description
+                  });
+              }
+          }
+      }
+      
+      console.log(`\n📋 解析器最终结果: ${resolvedArticles.length} 个原始链接`);
+      
+      resolvedArticles.forEach((article, i) => {
         console.log(`\n${i + 1}. ${article.title}`);
         console.log(`   📅 ${article.date ? article.date.toISOString() : 'No date'}`);
         console.log(`   📰 ${article.source || 'No source'}`);
@@ -249,12 +262,12 @@ class RSSGoogleNewsAnalyzer {
       
       return {
         sourceUrl: htmlUrl,
-        totalFound: articleItems.length,
-        filtered: articleItems.length,
-        processed: articles.length,
-        articles: articles,
+        totalFound: articles.length,
+        filtered: articles.length,
+        processed: resolvedArticles.length,
+        articles: resolvedArticles,
         success: true,
-        method: 'Enhanced_Resolver'
+        method: 'RSS_Decoder'
       };
       
     } catch (error) {
@@ -263,7 +276,7 @@ class RSSGoogleNewsAnalyzer {
         sourceUrl: htmlUrl,
         error: error.message,
         success: false,
-        method: 'Enhanced_Resolver'
+        method: 'RSS_Decoder'
       };
     }
   }

@@ -6,7 +6,7 @@
 
 ```bash
 # 连接到服务器
-ssh root@192.168.1.230
+ssh root@8.208.23.37
 
 # 安装 Docker（如果未安装）
 curl -fsSL https://get.docker.com | sh
@@ -31,7 +31,7 @@ cd /Users/weifang/Sites/i0086/site/newsscraper
 tar --exclude='.git' --exclude='node_modules' --exclude='logs' --exclude='temp' --exclude='*.tar.gz' --exclude='.DS_Store' -czf newsscraper-deploy.tar.gz .
 
 # 传输到服务器
-scp newsscraper-deploy.tar.gz root@192.168.1.230:/opt/newsscraper/
+scp newsscraper-deploy.tar.gz root@8.208.23.37:/opt/newsscraper/
 
 # 清理本地文件
 rm newsscraper-deploy.tar.gz
@@ -41,7 +41,7 @@ rm newsscraper-deploy.tar.gz
 
 ```bash
 # 连接到服务器
-ssh root@192.168.1.230
+ssh root@8.208.23.37
 
 # 进入部署目录
 cd /opt/newsscraper
@@ -83,7 +83,7 @@ docker-compose logs -f
 curl http://localhost:3000
 
 # 从外部访问
-# 浏览器打开: http://192.168.1.230:3000
+# 浏览器打开: http://8.208.23.37:3000
 ```
 
 ## 5. 常用管理命令
@@ -128,10 +128,10 @@ netstat -tlnp | grep :3000
 ### WordPress 连接问题
 ```bash
 # 测试 WordPress 连接
-curl -I http://192.168.1.230:8080
+curl -I http://8.208.23.37:8080
 
 # 检查配置
-cat config/config.remote-230.json
+cat config/config.remote-aliyun.json
 ```
 
 ### 权限问题

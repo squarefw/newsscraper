@@ -11,8 +11,7 @@ config/
 ├── api-keys.json                 # 密钥模板文件（已上传到Git）
 ├── api-keys.local.json          # 实际密钥文件（不上传Git）
 ├── config-loader.js             # 配置加载器
-├── config.remote-230.json       # 生产配置（已移除密钥）
-└── config.remote-aliyun.json    # 阿里云配置（已移除密钥）
+├── config.remote-aliyun.json    # 生产配置（已移除密钥）
 ```
 
 ## 快速设置
@@ -34,7 +33,7 @@ nano config/api-keys.local.json
 ```json
 {
   "wordpress": {
-    "remote-230": {
+    "remote-aliyun": {
       "username": "你的WordPress用户名",
       "password": "YOUR_PASSWORD"
     }
@@ -65,7 +64,7 @@ nano config/api-keys.local.json
 ### 环境支持
 
 配置加载器支持多环境：
-- `remote-230`: 192.168.1.230服务器环境
+- `remote-aliyun`: 8.208.23.37服务器环境
 - `remote-aliyun`: 阿里云服务器环境
 - `development`: 开发环境
 - `production`: 生产环境
@@ -78,7 +77,7 @@ nano config/api-keys.local.json
 
 ```bash
 # 原有命令无需更改，会自动加载密钥
-node tools/production/batch-ai-push.js config/config.remote-230.json
+node tools/production/batch-ai-push.js config/config.remote-aliyun.json
 ```
 
 ### 手动加载配置
@@ -87,7 +86,7 @@ node tools/production/batch-ai-push.js config/config.remote-230.json
 const ConfigLoader = require('./config/config-loader');
 
 const configLoader = new ConfigLoader();
-const config = configLoader.loadConfig('config/config.remote-230.json', 'remote-230');
+const config = configLoader.loadConfig('config/config.remote-aliyun.json', 'remote-aliyun');
 ```
 
 ## 安全特性
@@ -131,7 +130,7 @@ const config = configLoader.loadConfig('config/config.remote-230.json', 'remote-
 node -e "
 const ConfigLoader = require('./config/config-loader');
 const loader = new ConfigLoader();
-const config = loader.loadConfig('config/config.remote-230.json', 'remote-230');
+const config = loader.loadConfig('config/config.remote-aliyun.json', 'remote-aliyun');
 console.log('WordPress用户:', config.wordpress.username);
 console.log('Qwen密钥前5位:', config.ai.engines.qwen.apiKey.substring(0, 5));
 "

@@ -30,20 +30,20 @@
 
 ### 步骤 1: 配置 WordPress 应用密码
 
-1. 登录 WordPress 后台：http://192.168.1.230:8080/wp-admin
+1. 登录 WordPress 后台：http://8.208.23.37:8080/wp-admin
 2. 进入 "用户" → "个人资料"
 3. 创建应用密码：名称 "News Scraper"
 4. 复制生成的密码
 
 ### 步骤 2: 更新配置文件
 
-编辑 `config/config.remote-230.json`：
+编辑 `config/config.remote-aliyun.json`：
 
 ```json
 {
   "wordpress": {
     "enabled": true,
-    "baseUrl": "http://192.168.1.230:8080",
+    "baseUrl": "http://8.208.23.37:8080",
     "username": "squarefw@gmail.com",
     "password": "YOUR_API_PASSWORD",
     "defaultStatus": "draft",
@@ -75,7 +75,7 @@ https://www.rte.ie/news/business/2025/0805/1567890-business-update/
 
 ```bash
 # 使用远程配置运行增强版
-NODE_ENV=remote-230 node tools/batch-ai-push-enhanced.js examples/wordpress-test-urls.txt
+NODE_ENV=remote-aliyun node tools/batch-ai-push-enhanced.js examples/wordpress-test-urls.txt
 ```
 
 ## 📊 功能对比
@@ -140,8 +140,8 @@ NODE_ENV=remote-230 node tools/batch-ai-push-enhanced.js examples/wordpress-test
 新功能: ✅ WordPress分类约束 ✅ 来源链接 ✅ 智能分类
 ===============================================================
 
-📋 使用配置: /path/to/config.remote-230.json
-✅ WordPress 连接成功: http://192.168.1.230:8080
+📋 使用配置: /path/to/config.remote-aliyun.json
+✅ WordPress 连接成功: http://8.208.23.37:8080
 📂 获取到 5 个分类:
    - 科技 (12篇文章)
    - 新闻 (45篇文章)
@@ -165,7 +165,7 @@ NODE_ENV=remote-230 node tools/batch-ai-push-enhanced.js examples/wordpress-test
 📤 准备推送到自定义API: 处理后的新闻标题
    ✅ 自定义API推送成功 - 响应ID: abc123
 📤 准备推送到 WordPress: 处理后的新闻标题
-   ✅ WordPress 推送成功 - ID: 456, URL: http://192.168.1.230:8080/2025/08/05/news-title/
+   ✅ WordPress 推送成功 - ID: 456, URL: http://8.208.23.37:8080/2025/08/05/news-title/
 ✅ URL处理完成 (15234ms) - API:✅ WP:✅
 
 ===============================================================================
@@ -180,13 +180,13 @@ NODE_ENV=remote-230 node tools/batch-ai-push-enhanced.js examples/wordpress-test
 
 📰 成功推送到WordPress的文章:
    1. 处理后的新闻标题1 (ID: 456)
-      URL: http://192.168.1.230:8080/2025/08/05/news-title-1/
+      URL: http://8.208.23.37:8080/2025/08/05/news-title-1/
    2. 处理后的新闻标题2 (ID: 457)
-      URL: http://192.168.1.230:8080/2025/08/05/news-title-2/
+      URL: http://8.208.23.37:8080/2025/08/05/news-title-2/
 
 💡 提示:
    - WordPress文章以草稿状态创建，请登录后台查看并发布
-   - WordPress后台: http://192.168.1.230:8080/wp-admin
+   - WordPress后台: http://8.208.23.37:8080/wp-admin
    - 使用了WordPress分类约束，AI只能从5个现有分类中选择
 ```
 

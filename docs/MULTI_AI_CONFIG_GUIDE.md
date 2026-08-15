@@ -6,7 +6,7 @@ NewsScraper 现在支持多AI引擎分工合作，不同的AI任务可以由不�
 
 ## 配置结构
 
-### 完整配置示例 (config.remote-230.json)
+### 完整配置示例 (config.remote-aliyun.json)
 
 ```json
 {
@@ -191,7 +191,7 @@ NewsScraper 现在支持多AI引擎分工合作，不同的AI任务可以由不�
 
 ```bash
 # 使用配置文件运行
-node tools/production/batch-ai-push-enhanced.js config/config.remote-230.json examples/sample-urls.txt
+node tools/production/batch-ai-push-enhanced.js config/config.remote-aliyun.json examples/sample-urls.txt
 ```
 
 ## 优势

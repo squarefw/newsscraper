@@ -253,7 +253,7 @@ class WordPressConnector {
         path: url.pathname + url.search,
         method: 'GET',
         headers: {
-          'User-Agent': 'WordPress-Connector/1.0'
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
         },
         timeout: 30000
       }, (res) => {
@@ -527,9 +527,34 @@ class WordPressConnector {
   }
 
   /**
-   * 发起REST API请求
+   * 发起REST API请求 (带重试逻辑)
    */
-  async makeRestRequest(endpoint, method = 'GET', body = null, customHeaders = {}) {
+  async makeRestRequest(endpoint, method = 'GET', body = null, customHeaders = {}, retries = 3) {
+    let lastError;
+    for (let i = 0; i < retries; i++) {
+        try {
+            const res = await this.makeRestRequestRaw(endpoint, method, body, customHeaders);
+            // 只有 5xx 错误才重试，4xx (除429外) 通常是客户端问题
+            if (res.statusCode >= 500 || res.statusCode === 429) {
+                throw new Error(`HTTP ${res.statusCode}`);
+            }
+            return res;
+        } catch (error) {
+            lastError = error;
+            if (i < retries - 1) {
+                const delay = Math.pow(2, i) * 1000;
+                console.log(`   ⚠️ REST error (${error.message}), retrying in ${delay}ms... (${i+1}/${retries})`);
+                await new Promise(r => setTimeout(r, delay));
+            }
+        }
+    }
+    throw lastError;
+  }
+
+  /**
+   * 原始REST请求
+   */
+  async makeRestRequestRaw(endpoint, method = 'GET', body = null, customHeaders = {}) {
     return new Promise((resolve, reject) => {
       const url = new URL(`${this.config.baseUrl}/wp-json/wp/v2/${endpoint}`);
       const client = url.protocol === 'https:' ? https : http;
@@ -582,9 +607,29 @@ class WordPressConnector {
   }
 
   /**
-   * 发起XML-RPC请求
+   * 发起XML-RPC请求 (带重试逻辑)
    */
-  async xmlrpcCall(method, params = []) {
+  async xmlrpcCall(method, params = [], retries = 3) {
+    let lastError;
+    for (let i = 0; i < retries; i++) {
+        try {
+            return await this.xmlrpcCallRaw(method, params);
+        } catch (error) {
+            lastError = error;
+            if (i < retries - 1) {
+                const delay = Math.pow(2, i) * 1000;
+                console.log(`   ⚠️ XML-RPC error, retrying in ${delay}ms... (${i+1}/${retries})`);
+                await new Promise(r => setTimeout(r, delay));
+            }
+        }
+    }
+    throw lastError;
+  }
+
+  /**
+   * 原始XML-RPC请求
+   */
+  async xmlrpcCallRaw(method, params = []) {
     return new Promise((resolve, reject) => {
       const xmlrpcUrl = `${this.config.baseUrl}/xmlrpc.php`;
       const url = new URL(xmlrpcUrl);
@@ -730,13 +775,14 @@ class WordPressConnector {
   async verifyFeaturedImage(postId) {
     try {
       if (this.preferredMethod === 'rest') {
-        const result = await this.makeRestRequest(`/wp/v2/posts/${postId}`, 'GET');
-        if (result.success) {
+        const result = await this.makeRestRequest(`posts/${postId}`, 'GET');
+        if (result.statusCode === 200) {
           const post = JSON.parse(result.data);
           return {
             success: true,
             featuredMediaId: post.featured_media,
-            hasImage: post.featured_media > 0
+            hasImage: post.featured_media > 0,
+            method: 'rest'
           };
         }
       } else {

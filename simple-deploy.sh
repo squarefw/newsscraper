@@ -179,14 +179,22 @@ deploy_remote() {
             COMPOSE_FILE="docker-compose.yml"
         fi
         
-        # 检查 Docker 权限
+        # 检查 Docker 权限和 Compose 命令
         if docker ps &>/dev/null; then
             DOCKER_CMD="docker"
-            COMPOSE_CMD="docker-compose -f \$COMPOSE_FILE"
+            if docker-compose version &>/dev/null; then
+                COMPOSE_CMD="docker-compose -f \$COMPOSE_FILE"
+            else
+                COMPOSE_CMD="docker compose -f \$COMPOSE_FILE"
+            fi
         else
             echo "使用 sudo 权限运行 Docker 命令"
             DOCKER_CMD="sudo docker"
-            COMPOSE_CMD="sudo docker-compose -f \$COMPOSE_FILE"
+            if sudo docker-compose version &>/dev/null; then
+                COMPOSE_CMD="sudo docker-compose -f \$COMPOSE_FILE"
+            else
+                COMPOSE_CMD="sudo docker compose -f \$COMPOSE_FILE"
+            fi
         fi
         
         # 停止现有容器
@@ -222,7 +230,6 @@ deploy_remote() {
         \$COMPOSE_CMD logs --tail=5
         
         echo "部署完成！"
-        echo "Web 界面访问地址: http://\$(hostname -I | awk '{print \$1}'):3000"
 EOF
     
     if [ $? -eq 0 ]; then
@@ -257,7 +264,6 @@ main() {
     deploy_remote
     
     echo_info "部署完成！"
-    echo_info "Web 界面地址: http://${REMOTE_HOST#*@}:3000"
 }
 
 # 检查参数

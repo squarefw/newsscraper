@@ -6,7 +6,7 @@
 set -e
 
 # 配置变量
-REMOTE_HOST="${1:-192.168.1.230}"
+REMOTE_HOST="${1:-8.208.23.37}"
 REMOTE_USER="${2:-root}"
 APP_NAME="newsscraper"
 DEPLOY_DIR="/opt/${APP_NAME}"
@@ -201,9 +201,9 @@ show_usage() {
     echo "使用方法: $0 [hostname] [username]"
     echo ""
     echo "示例:"
-    echo "  $0 192.168.1.230 root"
-    echo "  $0 192.168.1.230        # 默认使用 root 用户"
-    echo "  $0                      # 默认 192.168.1.230 root"
+    echo "  $0 8.208.23.37 root"
+    echo "  $0 8.208.23.37        # 默认使用 root 用户"
+    echo "  $0                      # 默认 8.208.23.37 root"
     echo ""
     echo "部署后管理："
     echo "  ssh ${REMOTE_USER}@${REMOTE_HOST} 'cd ${DEPLOY_DIR} && docker-compose logs -f'"

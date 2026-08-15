@@ -42,7 +42,7 @@
             console.log(`   URLs already decoded, skipping decoding step.`);
           }
         }
-      }-queue.js config/config.remote-230.json     # 使用230配置
+ *   node discover-and-queue.js config/config.remote-aliyun.json     # 使用阿里云配置
  * 
  * 职责:
  * 1. 监控配置文件中指定的新闻源。
@@ -62,8 +62,10 @@ const ConfigLoader = require('../config/loader');
 const { MultiAIManager } = require('../ai/multiAIManager');
 const { findRelevantLinks, isGoogleNews } = require('../ai/sourceAnalyzer_new'); // 使用增强版
 const { isDuplicate } = require('../wordpress/wordpressDeduplicator');
+const GoogleNewsDecoder = require('../utils/googleNewsDecoder');
 const { resolveGoogleNewsUrls } = require('../browser/puppeteerResolver_enhanced');
 const NewsArticleFilter = require('../article/newsArticleFilter');
+const { extractNewsFromUrl, isNoiseTitle } = require('../article/newsExtractor');
 const ExecutionStateManager = require('../common/executionStateManager');
 
 /**
@@ -71,7 +73,7 @@ const ExecutionStateManager = require('../common/executionStateManager');
  */
 const parseArgs = () => {
   const args = process.argv.slice(2);
-  let configPath = 'config/config.remote-230.json'; // 默认配置
+  let configPath = 'config/config.remote-aliyun.json'; // 默认配置
   let testMode = false;
   
   // 解析参数
@@ -161,51 +163,18 @@ const getPageHtml = async (url) => {
  */
 const getLinkContentInfo = async (url) => {
   try {
-    const axios = require('axios');
-    const cheerio = require('cheerio');
+    const info = await extractNewsFromUrl(url);
     
-    const response = await axios.get(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; NewsScraperBot/1.0)'
-      },
-      timeout: 10000,
-      maxContentLength: 2000000  // 增加到2MB
-    });
-    
-    const $ = cheerio.load(response.data);
-    
-    // 提取标题
-    let title = $('title').text().trim() ||
-                $('h1').first().text().trim() ||
-                $('meta[property="og:title"]').attr('content') ||
-                '';
-    
-    // 提取正文内容
-    let content = '';
-    $('script, style, nav, footer, header, aside').remove();
-    
-    const contentSelectors = [
-      'article', '.article-content', '.content', '.post-content', 
-      '.entry-content', 'main', '.main-content'
-    ];
-    
-    for (const selector of contentSelectors) {
-      if ($(selector).length > 0) {
-        content = $(selector).text().trim();
-        break;
-      }
+    // 如果是噪音标题（如简报页），直接标记为失败
+    if (isNoiseTitle(info.title)) {
+      console.log(`     🚫 识别到噪音标题: "${info.title}"，跳过分析`);
+      return { url, title: info.title, content: '', success: false };
     }
-    
-    if (!content) {
-      content = $('p').map((i, el) => $(el).text().trim()).get().join(' ');
-    }
-    
-    content = content.replace(/\s+/g, ' ').substring(0, 2000);
-    
+
     return {
       url: url,
-      title: title,
-      content: content,
+      title: info.title,
+      content: info.content,
       success: true
     };
   } catch (error) {
@@ -341,13 +310,35 @@ async function main() {
         if (relevantLinks.length > 0) {
           // 检查是否需要解码：如果URL中包含news.google.com/rss/articles，说明是编码URL，需要解码
           const needsDecoding = relevantLinks.some(url => {
-            return url && (url.includes('news.google.com/rss/articles') || url.includes('news.google.com/articles'));
+            return url && (
+              url.includes('news.google.com/rss/articles') || 
+              url.includes('news.google.com/articles') ||
+              url.includes('news.google.com/topics/read') ||
+              url.includes('news.google.com/publications')
+            );
           });
           
           if (needsDecoding) {
             console.log(`   Found Google News encoded URLs, decoding...`);
-            const resolverOptions = config.discovery.urlResolver || {};
-            processedLinks = await resolveGoogleNewsUrls(relevantLinks, resolverOptions);
+            const decoder = new GoogleNewsDecoder();
+            const decodeResults = await decoder.decodeBatch(relevantLinks);
+            
+            processedLinks = [];
+            const failedLinks = [];
+            for (let i = 0; i < decodeResults.length; i++) {
+                if (decodeResults[i].status && decodeResults[i].url) {
+                    processedLinks.push(decodeResults[i].url);
+                } else {
+                    failedLinks.push(relevantLinks[i]);
+                }
+            }
+            
+            if (failedLinks.length > 0) {
+                console.log(`   ⚠️ Python bridge fallback failed for ${failedLinks.length} URLs, using Puppeteer...`);
+                const fallbackResults = await resolveGoogleNewsUrls(failedLinks, config.discovery.urlResolver || {});
+                processedLinks.push(...fallbackResults);
+            }
+            
             console.log(`   ✅ Decoding finished, resolved to ${processedLinks.length} final URLs.`);
           } else {
             console.log(`   URLs already decoded, skipping decoding step.`);
@@ -356,58 +347,103 @@ async function main() {
         }
       }
 
-      // 5.8. AI筛选新闻文章链接
+      // 5.8. 批处理 AI 筛选（资格审查 + 批次内去重）
       let articleLinks = processedLinks;
       if (config.discovery.articleFilter?.enabled && processedLinks.length > 0) {
         const filterConfig = config.discovery.articleFilter;
-        console.log(`\n🔍 开始AI筛选新闻文章链接 (${processedLinks.length}个链接)`);
-        
-        // 获取链接内容信息
+        console.log(`\n🔍 开始筛选新闻文章链接 (${processedLinks.length}个链接)`);
+
+        // 获取所有链接的完整内容（用于批处理）
         const linkDataArray = [];
         let maxLinks = Math.min(processedLinks.length, filterConfig.maxLinksToAnalyze || 10);
-        
-        // 测试模式：进一步限制AI分析的链接数量
+
+        // 测试模式：进一步限制
         if (testMode) {
           maxLinks = Math.min(maxLinks, 5);
-          console.log(`   🧪 测试模式：AI筛选限制为 ${maxLinks} 个链接`);
+          console.log(`   🧪 测试模式：限制为 ${maxLinks} 个链接`);
         }
-        
+
+        console.log(`   📥 抓取 ${maxLinks} 篇文章的完整内容...`);
         for (let i = 0; i < maxLinks; i++) {
           const url = processedLinks[i];
-          console.log(`   📋 获取内容 ${i + 1}/${maxLinks}: ${url.slice(0, 60)}...`);
-          const contentInfo = await getLinkContentInfo(url);
-          linkDataArray.push(contentInfo);
-        }
-        
-        // 初始化文章筛选器 - 使用完整配置
-        const articleFilter = new NewsArticleFilter(multiAIManager, filterConfig);
-        
-        // 执行筛选
-        articleLinks = await articleFilter.filterNewsArticles(linkDataArray);
-        console.log(`   ✅ 筛选完成: ${articleLinks.length}个新闻文章链接保留\n`);
-      } else {
-        console.log('   📝 新闻文章筛选功能未启用，保留所有链接');
-      }
-
-      // 6. AI去重检查
-      if (config.discovery.deduplication?.enabled) {
-        let newLinkCount = 0;
-        for (const link of articleLinks) {
-          process.stdout.write(`   - Checking link: ${link.slice(0, 70)}... `);
-          const duplicate = await isDuplicate(link, multiAIManager, config);
-          if (duplicate) {
-            process.stdout.write('[Duplicate]\n');
-          } else {
-            process.stdout.write('[New]\n');
-            allNewLinks.add(link);
-            newLinkCount++;
+          process.stdout.write(`   [${i + 1}/${maxLinks}] 抓取中... `);
+          try {
+            // 使用 extractNewsFromUrl 获取完整内容（10000 字符）
+            const { extractNewsFromUrl } = require('../article/newsExtractor');
+            const articleData = await extractNewsFromUrl(url);
+            linkDataArray.push({
+              url: url,
+              title: articleData.title || '',
+              content: articleData.content || '' // 完整内容（最多 8000 字符）
+            });
+            console.log(`✅ ${articleData.title?.substring(0, 40) || '(无标题)'}...`);
+          } catch (err) {
+            console.log(`❌ 抓取失败: ${err.message}`);
+            // 抓取失败的也加入，但内容为空，让 AI 判断
+            linkDataArray.push({
+              url: url,
+              title: '',
+              content: ''
+            });
           }
         }
-        console.log(`   Found ${newLinkCount} confirmed new links.`);
+
+        // 初始化文章筛选器
+        const articleFilter = new NewsArticleFilter(multiAIManager, filterConfig);
+
+        // 尝试批处理模式
+        try {
+          console.log(`\n🚀 使用批处理模式（1次 AI 调用完成资格审查+去重）...`);
+          const batchResult = await articleFilter.filterNewsArticlesBatch(linkDataArray);
+          articleLinks = batchResult.qualified;
+          console.log(`   ✅ 批处理完成: ${articleLinks.length} 篇文章通过筛选\n`);
+        } catch (batchError) {
+          // 批处理失败，降级为逐个调用
+          console.log(`\n⚠️ 批处理失败，降级为逐个调用模式...`);
+          articleLinks = await articleFilter.filterNewsArticles(linkDataArray);
+          console.log(`   ✅ 逐个筛选完成: ${articleLinks.length} 篇文章通过资格审查`);
+
+          // 逐个模式下需要单独做去重
+          if (config.discovery.deduplication?.enabled && articleLinks.length > 0) {
+            console.log(`\n🔍 开始逐个去重检查 (${articleLinks.length} 篇文章)...`);
+            const deduplicatedLinks = [];
+            for (const link of articleLinks) {
+              process.stdout.write(`   - 检查: ${link.slice(0, 60)}... `);
+              const duplicate = await isDuplicate(link, multiAIManager, config);
+              if (duplicate) {
+                process.stdout.write('[重复]\n');
+              } else {
+                process.stdout.write('[新文章]\n');
+                deduplicatedLinks.push(link);
+              }
+            }
+            articleLinks = deduplicatedLinks;
+            console.log(`   ✅ 去重完成: ${articleLinks.length} 篇新文章\n`);
+          }
+        }
       } else {
-        console.log('   Deduplication is disabled, all links will be treated as new.');
-        articleLinks.forEach(link => allNewLinks.add(link));
+        console.log('   📝 新闻文章筛选功能未启用，保留所有链接');
+        // 即使不筛选，也需要去重
+        if (config.discovery.deduplication?.enabled && articleLinks.length > 0) {
+          console.log(`\n🔍 开始去重检查 (${articleLinks.length} 篇文章)...`);
+          const deduplicatedLinks = [];
+          for (const link of articleLinks) {
+            process.stdout.write(`   - 检查: ${link.slice(0, 60)}... `);
+            const duplicate = await isDuplicate(link, multiAIManager, config);
+            if (duplicate) {
+              process.stdout.write('[重复]\n');
+            } else {
+              process.stdout.write('[新文章]\n');
+              deduplicatedLinks.push(link);
+            }
+          }
+          articleLinks = deduplicatedLinks;
+          console.log(`   ✅ 去重完成: ${articleLinks.length} 篇新文章\n`);
+        }
       }
+
+      // 将通过筛选的文章添加到 allNewLinks
+      articleLinks.forEach(link => allNewLinks.add(link));
     }
 
     // 7. 将新链接写入队列文件
