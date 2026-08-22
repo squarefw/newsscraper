@@ -194,16 +194,20 @@ const pushToWordPressWithConnector = async (processedData, originalUrl, config, 
       enhancedContent += template.replace('{date}', new Date().toLocaleString('zh-CN'));
     }
     
+    // 无分类时发布为 draft 待人工审核（AI判断不属于任何分类）
+    const hasCategory = !!processedData.categoryId;
+    const postStatus = hasCategory ? (config.wordpress.defaultStatus || 'publish') : 'draft';
+
     const postData = {
       title: cleanTitle,
       content: enhancedContent,
-      status: config.wordpress.defaultStatus || 'draft',
-      categories: processedData.categoryId ? [processedData.categoryId] : [],
+      status: postStatus,
+      categories: hasCategory ? [processedData.categoryId] : [],
       excerpt: processedData.summary || '',
       featuredMediaId: featuredMediaId  // 添加特色图片媒体ID
     };
 
-    console.log(`   📂 分类设置: categoryId=${processedData.categoryId}, categories=${JSON.stringify(postData.categories)}`);
+    console.log(`   📂 分类设置: categoryId=${processedData.categoryId}, categories=${JSON.stringify(postData.categories)}, 状态=${postStatus}${hasCategory ? '' : ' (无分类→draft待审)'}`);
 
     // 使用WordPress连接器发布文章
     const result = await wpConnector.publishPost(postData);
