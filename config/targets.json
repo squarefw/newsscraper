@@ -32,5 +32,57 @@
       "galway"
     ],
     "type": "google-news"
+  },
+  {
+    "name": "Google News - 中爱动态",
+    "url": "https://news.google.com/rss/search?q=china+ireland+when:7d&hl=en-IE&gl=IE&ceid=IE:en",
+    "schedule": "0 */6 * * *",
+    "aiSearchEnabled": true,
+    "aiExtractionEnabled": true,
+    "enabled": true,
+    "keywords": [
+      "china",
+      "ireland",
+      "chinese",
+      "sino",
+      "dublin",
+      "trade",
+      "culture"
+    ],
+    "type": "google-news"
+  },
+  {
+    "name": "Google News - 爱尔兰教育",
+    "url": "https://news.google.com/rss/search?q=ireland+education+when:7d&hl=en-IE&gl=IE&ceid=IE:en",
+    "schedule": "0 */6 * * *",
+    "aiSearchEnabled": true,
+    "aiExtractionEnabled": true,
+    "enabled": true,
+    "keywords": [
+      "ireland",
+      "education",
+      "school",
+      "university",
+      "student",
+      "college"
+    ],
+    "type": "google-news"
+  },
+  {
+    "name": "Google News - 爱尔兰文化",
+    "url": "https://news.google.com/rss/search?q=ireland+culture+when:7d&hl=en-IE&gl=IE&ceid=IE:en",
+    "schedule": "0 */6 * * *",
+    "aiSearchEnabled": true,
+    "aiExtractionEnabled": true,
+    "enabled": true,
+    "keywords": [
+      "ireland",
+      "culture",
+      "art",
+      "music",
+      "festival",
+      "theatre"
+    ],
+    "type": "google-news"
   }
 ]
