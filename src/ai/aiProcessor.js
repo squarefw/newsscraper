@@ -300,8 +300,16 @@ const validateAndGetCategoryId = async (aiSelectedCategory, categories, fallback
     return null;
   }
 
+  // 检测 AI 是否明确表示"无法分类"（内容不属于任何分类）
+  // 若是则返回 null，发布端会以 draft 状态待人工审核
+  const NO_CATEGORY_SIGNALS = ['无法分类', '不属于任何分类', '不适用', '无分类', '其他'];
+  if (aiSelectedCategory && NO_CATEGORY_SIGNALS.some(sig => aiSelectedCategory.toLowerCase().includes(sig))) {
+    console.log(`🚫 AI判断文章不属于任何分类: "${aiSelectedCategory}"`);
+    return null;
+  }
+
   // 查找匹配的分类
-  let matchedCategory = categories.find(cat => 
+  let matchedCategory = categories.find(cat =>
     cat.name.toLowerCase() === aiSelectedCategory.toLowerCase()
   );
 
@@ -892,6 +900,7 @@ const rewriteAndCategorizeBatch = async (multiAIManager, articles, maxCharsPerBa
 从以下选项中选择最合适的分类：中爱动态、时政要闻、财经商业、科技产业、社会民生、教育文化、移民法务、房产规划
 - 涉及中国与爱尔兰关系/合作/往来/华人社区的文章，优先选择"中爱动态"
 - 其他按内容主题选择对应分类
+- 如果文章内容与以上所有分类都不相关（如纯国际新闻、与爱尔兰/中国无关、低价值碎片内容），category 返回"无法分类"
 
 **严格禁止：**
 - 不要包含任何处理说明文字
