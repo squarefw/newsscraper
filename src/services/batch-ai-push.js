@@ -156,9 +156,10 @@ const finalCleanContent = (content, type = 'content') => {
     // 标题特殊处理
     cleaned = cleaned.replace(/^["'「」『』""'']*|["'「」『』""'']*$/g, '');
     cleaned = cleaned.replace(/[：:]\s*$/, '');
-    // 确保标题长度合理 - WordPress标题字段限制通常是255字符，中文标题60字符比较合适
-    if (cleaned.length > 60) {
-      cleaned = cleaned.substring(0, 57) + '...';
+    // 标题保持完整，不截断 - WordPress标题字段限制255字符
+    // 仅当标题异常超长时（>200字符）才做保护性截断，避免发布失败
+    if (cleaned.length > 200) {
+      cleaned = cleaned.substring(0, 197) + '...';
     }
   }
 
@@ -472,16 +473,17 @@ async function main() {
 
       try {
         // 准备 AI 处理结果（适配现有结构）
+        const originalArticle = articlesData.find(a => a.url === url);
         const aiProcessResult = {
           finalTitle: article.rewrittenTitle,
           finalContent: article.rewrittenContent,
           category: article.category,
-          categoryId: article.categoryId
+          categoryId: article.categoryId,
+          originalTitle: originalArticle?.title || ''  // 原始英文标题，用于来源链接
         };
 
         // 图片上传处理
         let featuredMediaId = null;
-        const originalArticle = articlesData.find(a => a.url === url);
         if (originalArticle?.imageUrl) {
           console.log('🖼️ 开始处理特色图片...');
           try {

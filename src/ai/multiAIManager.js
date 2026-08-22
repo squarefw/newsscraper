@@ -322,9 +322,10 @@ class MultiAIManager {
       cleaned = cleaned.replace(/^["'「」『』""'']*|["'「」『』""'']*$/g, '');
       // 移除标题中的冒号后缀
       cleaned = cleaned.replace(/[：:]\s*$/, '');
-      // 确保标题长度合理（20字符以内）
-      if (cleaned.length > 25) {
-        cleaned = cleaned.substring(0, 22) + '...';
+      // 标题保持完整，不截断 - WordPress标题字段限制255字符
+      // 仅当标题异常超长时（>200字符）才做保护性截断，避免发布失败
+      if (cleaned.length > 200) {
+        cleaned = cleaned.substring(0, 197) + '...';
       }
     }
     
