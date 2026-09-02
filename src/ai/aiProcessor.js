@@ -321,16 +321,11 @@ const validateAndGetCategoryId = async (aiSelectedCategory, categories, fallback
     );
   }
 
-  // 如果仍然没有匹配，使用默认分类
+  // 如果仍然没有匹配，说明 AI 返回的分类不在已知分类列表中
+  // 返回 null，发布端会以 draft 状态待人工审核（避免硬塞不合适的分类）
   if (!matchedCategory) {
-    const fallback = categories.find(cat => 
-      cat.name === fallbackCategory ||
-      cat.name.includes('新闻') ||
-      cat.name.includes('未分类')
-    ) || categories[0];
-    
-    console.log(`⚠️  AI选择的分类"${aiSelectedCategory}"不存在，使用默认分类"${fallback.name}"`);
-    return fallback.id;
+    console.log(`⚠️  AI选择的分类"${aiSelectedCategory}"不在已知分类中，发布为 draft 待人工审核`);
+    return null;
   }
 
   console.log(`✅ 分类匹配成功: "${aiSelectedCategory}" -> "${matchedCategory.name}" (ID: ${matchedCategory.id})`);
@@ -898,9 +893,13 @@ const rewriteAndCategorizeBatch = async (multiAIManager, articles, maxCharsPerBa
 
 **分类要求：**
 从以下选项中选择最合适的分类：中爱动态、时政要闻、财经商业、科技产业、社会民生、教育文化、移民法务、房产规划
-- 涉及中国与爱尔兰关系/合作/往来/华人社区的文章，优先选择"中爱动态"
-- 其他按内容主题选择对应分类
-- 如果文章内容与以上所有分类都不相关（如纯国际新闻、与爱尔兰/中国无关、低价值碎片内容），category 返回"无法分类"
+
+分类判断规则（按优先级）：
+1. 爱尔兰本地新闻 → 按主题选择对应分类：时政要闻/财经商业/社会民生/教育文化/科技产业/移民法务/房产规划
+2. 同时涉及中国与爱尔兰关系、合作、往来或华人社区的文章 → "中爱动态"
+3. 纯中国新闻（与中国有关但与爱尔兰无关，如中国电影、中国社会、中国政治、中国经济）→ "无法分类"
+4. 纯国际新闻（与爱尔兰和中国都无关）→ "无法分类"
+5. 低价值内容（八卦、广告、重复摘要、碎片信息）→ "无法分类"
 
 **严格禁止：**
 - 不要包含任何处理说明文字
@@ -940,6 +939,79 @@ ${JSON.stringify(inputArticles, null, 2)}
   return allResults;
 };
 
+/**
+ * 从所有文章中选出编辑精选（1-5 篇）
+ * @param {Object} multiAIManager - AI管理器
+ * @param {Array} articles - 已处理的文章列表 [{url, rewrittenTitle, category, rewrittenContent}]
+ * @returns {Array} 编辑精选文章的URL列表（最多5个）
+ */
+const selectEditorPicks = async (multiAIManager, articles) => {
+  if (!articles || articles.length === 0) {
+    console.log('   🟡 没有文章可选');
+    return [];
+  }
+
+  // 准备输入：标题 + 分类 + 摘要（前200字）
+  const inputArticles = articles.map(article => ({
+    url: article.url,
+    title: article.rewrittenTitle || '',
+    category: article.category || '',
+    summary: (article.rewrittenContent || '').substring(0, 200)
+  }));
+
+  const prompt = `你是一名资深新闻编辑。请从以下 ${articles.length} 篇文章中选出最值得作为"编辑精选"的文章。
+
+**选择标准（必须同时满足）：**
+1. 高新闻价值：时效性强、当天最重要、最吸引眼球
+2. 适合推送给中国新闻网：中爱关系、爱尔兰重大政策、对中国读者有意义的爱尔兰新闻
+
+**输出格式（严格遵循）：**
+返回一个 JSON 对象：
+\`\`\`json
+{
+  "editorPicks": ["url1", "url2", ...]
+}
+\`\`\`
+
+**要求：**
+- 必须选出 1-5 篇（根据当天新闻质量决定）
+- 如果当天没有够格的文章，可以返回空数组 []
+- 只输出 JSON，不要其他说明文字
+
+文章列表：
+\`\`\`json
+${JSON.stringify(inputArticles, null, 2)}
+\`\`\``;
+
+  try {
+    console.log(`   🤖 AI正在从 ${articles.length} 篇文章中选择编辑精选...`);
+    const engine = multiAIManager.getAgentForTask('rewrite');
+    const response = await engine.processContent(prompt, 'custom');
+
+    // 解析 JSON
+    let cleanResponse = response.trim();
+    if (cleanResponse.startsWith('```json')) {
+      cleanResponse = cleanResponse.replace(/^```json\s*/, '').replace(/```\s*$/, '');
+    } else if (cleanResponse.startsWith('```')) {
+      cleanResponse = cleanResponse.replace(/^```\s*/, '').replace(/```\s*$/, '');
+    }
+
+    const parsed = JSON.parse(cleanResponse);
+    const editorPicks = parsed.editorPicks || [];
+
+    // 限制最多5篇
+    if (editorPicks.length > 5) {
+      console.log(`   ⚠️  AI选择了${editorPicks.length}篇编辑精选，截断为5篇`);
+      return editorPicks.slice(0, 5);
+    }
+
+    return editorPicks;
+  } catch (error) {
+    console.error(`   ❌ 选择编辑精选失败: ${error.message}`);
+    return [];
+  }
+};
+
 module.exports = {
   extractUnifiedResult,
   getTaskName,
@@ -954,5 +1026,6 @@ module.exports = {
   regenerateTitle, // 新增：标题重新生成
   extractTitleAndContent, // 新增：智能标题提取
   translateArticlesBatch, // 新增：批处理翻译
-  rewriteAndCategorizeBatch // 新增：批处理重写+分类
+  rewriteAndCategorizeBatch, // 新增：批处理重写+分类
+  selectEditorPicks // 新增：选择编辑精选
 };

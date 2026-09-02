@@ -198,16 +198,37 @@ const pushToWordPressWithConnector = async (processedData, originalUrl, config, 
     const hasCategory = !!processedData.categoryId;
     const postStatus = hasCategory ? (config.wordpress.defaultStatus || 'publish') : 'draft';
 
+    // 构建分类列表（支持多分类：普通分类 + 编辑精选）
+    const categories = [];
+    if (hasCategory) {
+      categories.push(processedData.categoryId);
+    }
+
+    // 如果是编辑精选，额外添加分类 ID 205
+    const EDITOR_PICK_CATEGORY_ID = 205;
+    if (processedData.isEditorPick) {
+      if (!categories.includes(EDITOR_PICK_CATEGORY_ID)) {
+        categories.push(EDITOR_PICK_CATEGORY_ID);
+        console.log(`   ⭐ 标记为编辑精选，添加分类ID: ${EDITOR_PICK_CATEGORY_ID}`);
+      }
+    }
+
+    // 摘要兜底：summary 为空或过短时，从正文自动截取 80-140 字，避免分类页只显示十几个字
+    const stripForExcerpt = (str) => str.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+    const autoExcerpt = stripForExcerpt(cleanContent).slice(0, 140);
+    const rawSummary = (processedData.summary || '').trim();
+    const excerptText = rawSummary.length >= 40 ? rawSummary.slice(0, 160) : autoExcerpt;
+
     const postData = {
       title: cleanTitle,
       content: enhancedContent,
       status: postStatus,
-      categories: hasCategory ? [processedData.categoryId] : [],
-      excerpt: processedData.summary || '',
+      categories: categories,
+      excerpt: excerptText,
       featuredMediaId: featuredMediaId  // 添加特色图片媒体ID
     };
 
-    console.log(`   📂 分类设置: categoryId=${processedData.categoryId}, categories=${JSON.stringify(postData.categories)}, 状态=${postStatus}${hasCategory ? '' : ' (无分类→draft待审)'}`);
+    console.log(`   📂 分类设置: categoryId=${processedData.categoryId}, categories=${JSON.stringify(categories)}, 状态=${postStatus}${hasCategory ? '' : ' (无分类→draft待审)'}${processedData.isEditorPick ? ' [编辑精选]' : ''}`);
 
     // 使用WordPress连接器发布文章
     const result = await wpConnector.publishPost(postData);
@@ -460,6 +481,19 @@ async function main() {
       }
     }
 
+    // 步骤 3.6: 选择编辑精选（1-5 篇）
+    console.log('⭐ 步骤 3.6/4: 选择编辑精选...');
+    const editorPickUrls = await aiProcessor.selectEditorPicks(multiAIManager, processedArticles);
+    console.log(`   ✅ 选出 ${editorPickUrls.length} 篇编辑精选`);
+
+    // 给编辑精选文章标记
+    processedArticles.forEach(article => {
+      if (editorPickUrls.includes(article.url)) {
+        article.isEditorPick = true;
+        console.log(`   ⭐ "${article.rewrittenTitle?.substring(0, 30) || '(无标题)'}..." 被选为编辑精选`);
+      }
+    });
+
     // 步骤 4: 发布到 WordPress
     console.log('📤 步骤 4/4: 发布到 WordPress...');
     const results = [];
@@ -483,7 +517,8 @@ async function main() {
           finalContent: article.rewrittenContent,
           category: article.category,
           categoryId: article.categoryId,
-          originalTitle: originalArticle?.title || ''  // 原始英文标题，用于来源链接
+          originalTitle: originalArticle?.title || '',  // 原始英文标题，用于来源链接
+          isEditorPick: article.isEditorPick || false  // 是否是编辑精选
         };
 
         // 图片上传处理
