@@ -241,12 +241,27 @@ class WordPressConnector {
 
   /**
    * 下载图片数据
+   * 优化：1) 优先使用 HTTPS（避免 HTTP→HTTPS 的 301 重定向）
+   *       2) 支持跟随 301/302/307/308 重定向（最多 5 次）
    */
-  async downloadImage(imageUrl) {
+  async downloadImage(imageUrl, redirectCount = 0) {
+    const MAX_REDIRECTS = 5;
+
     return new Promise((resolve, reject) => {
-      const url = new URL(imageUrl);
+      // 优先使用 HTTPS（很多网站的 HTTP 版本会通过 301 重定向到 HTTPS）
+      if (imageUrl.startsWith('http://')) {
+        imageUrl = imageUrl.replace('http://', 'https://');
+      }
+
+      let url;
+      try {
+        url = new URL(imageUrl);
+      } catch (e) {
+        reject(new Error(`无效的图片URL: ${imageUrl}`));
+        return;
+      }
       const client = url.protocol === 'https:' ? https : http;
-      
+
       const req = client.request({
         hostname: url.hostname,
         port: url.port || (url.protocol === 'https:' ? 443 : 80),
@@ -257,6 +272,28 @@ class WordPressConnector {
         },
         timeout: 30000
       }, (res) => {
+        // 处理重定向：301/302/307/308
+        if ([301, 302, 307, 308].includes(res.statusCode) && res.headers.location) {
+          res.resume(); // 消费响应体，释放连接
+          if (redirectCount >= MAX_REDIRECTS) {
+            reject(new Error(`重定向次数超过上限(${MAX_REDIRECTS})`));
+            return;
+          }
+          // 支持相对路径 Location
+          let redirectUrl;
+          try {
+            redirectUrl = new URL(res.headers.location, imageUrl).toString();
+          } catch (e) {
+            reject(new Error(`无效的重定向URL: ${res.headers.location}`));
+            return;
+          }
+          console.log(`   🔄 跟随重定向(${res.statusCode}): ${redirectUrl.substring(0, 80)}...`);
+          this.downloadImage(redirectUrl, redirectCount + 1)
+            .then(resolve)
+            .catch(reject);
+          return;
+        }
+
         if (res.statusCode !== 200) {
           reject(new Error(`HTTP ${res.statusCode}: ${res.statusMessage}`));
           return;
@@ -267,29 +304,29 @@ class WordPressConnector {
         res.on('end', () => {
           const imageBuffer = Buffer.concat(chunks);
           const contentType = res.headers['content-type'] || 'image/jpeg';
-          
+
           // 从URL提取文件名并规范化
           let filename = url.pathname.split('/').pop() || 'image';
-          
+
           // 移除无效字符，限制长度
           filename = filename.replace(/[^a-zA-Z0-9.-]/g, '_').substring(0, 50);
-          
+
           // 确保有正确的扩展名
           if (!filename.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
-            const extension = contentType.includes('jpeg') ? '.jpg' : 
+            const extension = contentType.includes('jpeg') ? '.jpg' :
                             contentType.includes('png') ? '.png' :
                             contentType.includes('gif') ? '.gif' :
                             contentType.includes('webp') ? '.webp' : '.jpg';
             filename += extension;
           }
-          
+
           // 确保文件名不为空且不以点开头
           if (!filename || filename.startsWith('.')) {
             filename = 'featured_image.jpg';
           }
-          
+
           console.log(`   🔍 图片信息: ${filename} (${contentType}, ${Math.round(imageBuffer.length/1024)}KB)`);
-          
+
           resolve({
             buffer: imageBuffer,
             contentType,
@@ -297,13 +334,13 @@ class WordPressConnector {
           });
         });
       });
-      
+
       req.on('error', reject);
       req.on('timeout', () => {
         req.destroy();
         reject(new Error('下载图片超时'));
       });
-      
+
       req.end();
     });
   }
