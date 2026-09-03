@@ -734,16 +734,117 @@ const processNewsWithDynamicCategories = async (multiAIManager, originalContent,
  * @param {Array} articles - 文章数组
  * @param {number} maxCharsPerBatch - 每批累计最大字符数（默认12000，输出约12000 tokens）
  * @param {Function} getContent - 获取用于计量长度的内容
+ * @param {number} maxArticlesPerBatch - 每批最多文章数。若一批塞入太多篇，单次AI输出的
+ *   max_tokens 预算会被各篇瓜分，导致每篇内容被逐篇压缩（如19篇/批时每篇只剩几百字）。
+ *   设为 4 保证每篇能获得完整输出预算。
  * @returns {Array} 分批后的数组
  */
-const chunkArticlesBySize = (articles, getContent, maxCharsPerBatch = 12000) => {
+/**
+ * 健壮地解析 AI 返回的 { results: [...] } JSON。
+ * 长译文常含未转义的换行/引号导致 JSON.parse 抛错，此时逐条正则提取每个字段。
+ * 支持格式示例：
+ *   {"results":[{"url":"...","translatedTitle":"...","translatedContent":"...","category":"..."}]}
+ * 返回数组；解析失败抛错。
+ */
+const parseAiResultsArray = (raw) => {
+  if (!raw || typeof raw !== 'string') {
+    throw new Error('AI 响应为空');
+  }
+  let text = raw.trim();
+  // 去掉 ```json 代码围栏
+  if (text.startsWith('```json')) {
+    text = text.replace(/^```json\s*/, '').replace(/```\s*$/, '');
+  } else if (text.startsWith('```')) {
+    text = text.replace(/^```\s*/, '').replace(/```\s*$/, '');
+  }
+  text = text.trim();
+
+  // 尝试标准解析
+  try {
+    const parsed = JSON.parse(text);
+    if (parsed && Array.isArray(parsed.results)) return parsed.results;
+    throw new Error('缺少 results 数组');
+  } catch (e) {
+    // 标准解析失败 → 逐条宽松提取
+    if (!/^\{[\s\S]*\}$/.test(text)) {
+      throw new Error(`AI 响应不是 JSON 对象: ${e.message}`);
+    }
+    // 按顶层 "results": [ ... ] 切出数组区间
+    const arrStart = text.indexOf('"results"');
+    if (arrStart === -1) throw new Error('未找到 results 字段');
+    const bracketStart = text.indexOf('[', arrStart);
+    if (bracketStart === -1) throw new Error('results 后缺少数组');
+    // 匹配配对的中括号（逐字符计数）
+    let depth = 0, arrEnd = -1;
+    for (let i = bracketStart; i < text.length; i++) {
+      if (text[i] === '[') depth++;
+      else if (text[i] === ']') { depth--; if (depth === 0) { arrEnd = i; break; } }
+    }
+    if (arrEnd === -1) throw new Error('results 数组未闭合');
+    const arrBody = text.slice(bracketStart + 1, arrEnd);
+
+    // 拆分成条目：从每个 { 开始（粗略），用配对花括号切分
+    const entries = [];
+    let i = 0;
+    while (i < arrBody.length) {
+      while (i < arrBody.length && arrBody[i] !== '{') i++;
+      if (i >= arrBody.length) break;
+      let d = 0, j = i;
+      let inStr = false, esc = false;
+      for (; j < arrBody.length; j++) {
+        const ch = arrBody[j];
+        if (inStr) {
+          if (esc) esc = false;
+          else if (ch === '\\') esc = true;
+          else if (ch === '"') inStr = false;
+        } else {
+          if (ch === '"') inStr = true;
+          else if (ch === '{') d++;
+          else if (ch === '}') { d--; if (d === 0) break; }
+        }
+      }
+      entries.push(arrBody.slice(i, j + 1));
+      i = j + 1;
+    }
+
+    // 每条提取字段
+    const results = [];
+    for (const ent of entries) {
+      const item = {};
+      // 提取 "key": "value" —— value 可能含转义与未转义内容，做宽容匹配
+      const fieldRe = /"(\w+)"\s*:\s*"((?:[^"\\]|\\.)*)"/g;
+      let m;
+      while ((m = fieldRe.exec(ent)) !== null) {
+        let val = m[2];
+        // 反转义常见 JSON 转义
+        val = val
+          .replace(/\\n/g, '\n')
+          .replace(/\\t/g, '\t')
+          .replace(/\\"/g, '"')
+          .replace(/\\\\/g, '\\');
+        // 清理行内剩余的反斜杠转义残留（如 \u 保留原样）
+        if (!(item[m[1]] === undefined)) {
+          item[m[1]] = val;
+        } else {
+          item[m[1]] = val;
+        }
+      }
+      if (Object.keys(item).length > 0) results.push(item);
+    }
+    if (results.length === 0) throw new Error('宽松解析未能提取到任何条目');
+    return results;
+  }
+};
+
+const chunkArticlesBySize = (articles, getContent, maxCharsPerBatch = 12000, maxArticlesPerBatch = 4) => {
   const batches = [];
   let currentBatch = [];
   let currentSize = 0;
 
   for (const article of articles) {
     const size = (getContent(article) || '').length;
-    if (currentBatch.length > 0 && currentSize + size > maxCharsPerBatch) {
+    // 两个条件任一达到即封批：超过字符总量 或 超过篇数上限
+    if (currentBatch.length > 0 && (currentSize + size > maxCharsPerBatch || currentBatch.length >= maxArticlesPerBatch)) {
       batches.push(currentBatch);
       currentBatch = [];
       currentSize = 0;
@@ -775,64 +876,42 @@ const translateArticlesBatch = async (multiAIManager, articles, maxCharsPerBatch
       content: article.content || ''
     }));
 
-    const prompt = `你是一名资深新闻编辑和播报撰稿人。请将以下英文新闻精准翻译为中文。
+    // 构建输入数据（文本形式，避免嵌套JSON诱导模型保守输出）
+    const inputText = batch.map((a, i) => {
+      const item = inputArticles[i] || a;
+      return `【第${i + 1}篇】\n原文URL: ${item.url}\n英文标题: ${item.title || ''}\n英文正文:\n${item.content || ''}`;
+    }).join('\n\n');
 
-**输出格式要求（严格遵循）：**
-返回一个 JSON 对象，格式如下：
-\`\`\`json
+    const prompt = `你是资深中文新闻编辑。请把下面的英文新闻完整翻译成中文。
+
+**硬性要求：**
+1. 必须逐段完整翻译全文，不得概括、压缩、删减任何段落、句子或细节
+2. 保留所有具体事实、数字、人名、地名、机构名、引语和原文提到的日期
+3. 译文信息量必须与原文相当：原文约每 6 个英文字符对应 1 个中文字，译文总长度应接近原文字符数的 1/3 到 1/2（例如原文 6000 字符 → 译文应约 2000 中文字）
+4. 用专业新闻中文，段落分明，可直接发布
+5. 中文标题要准确概括新闻核心，可直接用作发布标题
+
+**输出格式（必须严格遵循，只输出 JSON）：**
 {
   "results": [
-    {
-      "url": "原始URL",
-      "translatedTitle": "翻译后的中文新闻标题",
-      "translatedContent": "翻译后的中文正文内容"
-    }
+    {"url": "原文URL", "translatedTitle": "中文标题", "translatedContent": "完整的全文翻译"}
   ]
 }
-\`\`\`
 
-**标题质量要求（极其重要）：**
-- 标题必须具体明确，包含实际的人名、地名、公司名或具体事件
-- 严格避免以"根据"、"关于"、"基于"、"针对"等抽象词语开头
-- 标题长度控制在8-25个中文字符
-- 必须概括新闻的核心事件，而非背景信息
+注意：translatedContent 必须放入**完整且未经压缩**的中文全文。
 
-**翻译要求：**
-1. 保持90%以上原文信息完整性与准确性，不擅自增删事实
-2. 采用半官方媒体常用的专业、严谨新闻用语
-3. 段落结构清晰，适合朗读与播报
-4. 日期格式统一为"YYYY年M月D日"
-5. 数字1-9用中文数字，10及以上用阿拉伯数字
-
-**严格禁止：**
-- 绝对不要包含任何形式的处理说明文字
-- 绝对不要添加任何解释、注释、过程描述或XML标签
-- 只输出 JSON，不要 markdown 标记
-
-输入数据：
-\`\`\`json
-${JSON.stringify(inputArticles, null, 2)}
-\`\`\``;
+需要翻译的英文新闻：
+${inputText}`;
 
     try {
       const engine = multiAIManager.getAgentForTask('translate');
       const response = await engine.processContent(prompt, 'custom');
 
-      // 解析 JSON 响应
-      let cleanResponse = response.trim();
-      if (cleanResponse.startsWith('\`\`\`json')) {
-        cleanResponse = cleanResponse.replace(/^\`\`\`json\s*/, '').replace(/\`\`\`\s*$/, '');
-      } else if (cleanResponse.startsWith('\`\`\`')) {
-        cleanResponse = cleanResponse.replace(/^\`\`\`\s*/, '').replace(/\`\`\`\s*$/, '');
-      }
+      // 解析 JSON 响应（含宽容回退，处理长译文中的转义问题）
+      const parsedResults = parseAiResultsArray(response);
 
-      const parsed = JSON.parse(cleanResponse);
-      if (!parsed.results || !Array.isArray(parsed.results)) {
-        throw new Error('响应格式错误：缺少 results 数组');
-      }
-
-      console.log(`   ✅ 批次翻译完成: ${parsed.results.length} 篇`);
-      allResults.push(...parsed.results);
+      console.log(`   ✅ 批次翻译完成: ${parsedResults.length} 篇`);
+      allResults.push(...parsedResults);
     } catch (error) {
       console.error(`   ❌ 翻译批次 ${i + 1} 失败: ${error.message}`);
       throw error;
@@ -868,67 +947,46 @@ const rewriteAndCategorizeBatch = async (multiAIManager, articles, maxCharsPerBa
       originalTitle: article.originalTitle || ''
     }));
 
-    const prompt = `你是一名资深新闻编辑。请对以下已翻译的中文新闻进行专业重写，并为每篇文章选择最合适的分类。
+    // 构建输入数据（文本形式，避免嵌套JSON诱导模型压缩内容）
+    const inputText = batch.map((a, i) => {
+      const item = inputArticles[i] || a;
+      return `【第${i + 1}篇】\n原文URL: ${item.url}\n英文原标题: ${item.originalTitle || ''}\n中文标题: ${item.translatedTitle || ''}\n中文译文全文:\n${item.translatedContent || ''}`;
+    }).join('\n\n');
 
-**输出格式要求（严格遵循）：**
-返回一个 JSON 对象，格式如下：
-\`\`\`json
+    const prompt = `你是资深中文新闻编辑。请对下面的中文新闻做专业的润色重写，并为每篇选择最合适的分类。
+
+**硬性要求：**
+1. 必须完整保留译文的全部内容和信息，不得删减、压缩、概括任何段落、句子或细节
+2. 只优化语句通顺度、用词专业性和可读性（半官方媒体风格），使成稿可直接发布
+3. 保留所有具体事实、数字、人名、地名、机构名、引语
+4. rewrittenTitle 是准确简洁的中文发布标题
+5. rewrittenContent 是完整、未经压缩的重写全文
+
+**分类（只能从下列选一个）：**
+中爱动态、时政要闻、财经商业、科技产业、社会民生、教育文化、移民法务、房产规划
+- 涉及中国与爱尔兰关系/合作/往来/华人社区的文章 → "中爱动态"
+- 爱尔兰本地新闻 → 按其主题选对应分类
+- 纯中国新闻、纯国际新闻（均与爱尔兰和中国无关）或低价值碎片内容 → "无法分类"
+
+**输出格式（必须严格遵循，只输出 JSON）：**
 {
   "results": [
-    {
-      "url": "原始URL",
-      "rewrittenTitle": "重写后的中文标题",
-      "rewrittenContent": "重写后的中文正文",
-      "category": "分类名称"
-    }
+    {"url": "原文URL", "rewrittenTitle": "中文标题", "rewrittenContent": "完整的重写全文", "category": "分类名称"}
   ]
 }
-\`\`\`
 
-**重写要求：**
-1. 保持原文信息密度90%以上，确保事实完整性
-2. 优化段落结构，提升播报适应性
-3. 使用专业新闻术语，符合半官方媒体标准
-4. 标题必须具体明确，避免抽象词语开头
-
-**分类要求：**
-从以下选项中选择最合适的分类：中爱动态、时政要闻、财经商业、科技产业、社会民生、教育文化、移民法务、房产规划
-
-分类判断规则（按优先级）：
-1. 爱尔兰本地新闻 → 按主题选择对应分类：时政要闻/财经商业/社会民生/教育文化/科技产业/移民法务/房产规划
-2. 同时涉及中国与爱尔兰关系、合作、往来或华人社区的文章 → "中爱动态"
-3. 纯中国新闻（与中国有关但与爱尔兰无关，如中国电影、中国社会、中国政治、中国经济）→ "无法分类"
-4. 纯国际新闻（与爱尔兰和中国都无关）→ "无法分类"
-5. 低价值内容（八卦、广告、重复摘要、碎片信息）→ "无法分类"
-
-**严格禁止：**
-- 不要包含任何处理说明文字
-- 只输出 JSON，不要 markdown 标记
-
-输入数据：
-\`\`\`json
-${JSON.stringify(inputArticles, null, 2)}
-\`\`\``;
+需要重写的中文新闻：
+${inputText}`;
 
     try {
       const engine = multiAIManager.getAgentForTask('rewrite');
       const response = await engine.processContent(prompt, 'custom');
 
-      // 解析 JSON 响应
-      let cleanResponse = response.trim();
-      if (cleanResponse.startsWith('\`\`\`json')) {
-        cleanResponse = cleanResponse.replace(/^\`\`\`json\s*/, '').replace(/\`\`\`\s*$/, '');
-      } else if (cleanResponse.startsWith('\`\`\`')) {
-        cleanResponse = cleanResponse.replace(/^\`\`\`\s*/, '').replace(/\`\`\`\s*$/, '');
-      }
+      // 解析 JSON 响应（含宽容回退，处理长文本中的转义问题）
+      const parsedResults = parseAiResultsArray(response);
 
-      const parsed = JSON.parse(cleanResponse);
-      if (!parsed.results || !Array.isArray(parsed.results)) {
-        throw new Error('响应格式错误：缺少 results 数组');
-      }
-
-      console.log(`   ✅ 批次重写+分类完成: ${parsed.results.length} 篇`);
-      allResults.push(...parsed.results);
+      console.log(`   ✅ 批次重写+分类完成: ${parsedResults.length} 篇`);
+      allResults.push(...parsedResults);
     } catch (error) {
       console.error(`   ❌ 重写批次 ${i + 1} 失败: ${error.message}`);
       throw error;
