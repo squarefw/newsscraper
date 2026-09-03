@@ -98,14 +98,14 @@
             "qwen_dev": {
                 "apiKey": "FROM_API_KEYS_CONFIG",
                 "model": "qwen-long",
-                "maxTokens": 8000,
+                "maxTokens": 32000,
                 "temperature": 0.3,
                 "timeout": 180000
             },
             "qwen": {
                 "apiKey": "FROM_API_KEYS_CONFIG",
                 "model": "qwen-long",
-                "maxTokens": 8000,
+                "maxTokens": 32000,
                 "temperature": 0.3,
                 "timeout": 180000
             }
