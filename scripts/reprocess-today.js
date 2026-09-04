@@ -204,6 +204,12 @@ async function main() {
     // 构建内容：重写正文 + 来源链接 + 发布时间
     const cleanTitle = (r.rewrittenTitle || '').trim();
     const cleanContent = (r.rewrittenContent || '').trim();
+    // 空内容保护：重写/翻译失败(如AI返回空或模板残留)则跳过，避免覆盖已有正常内容
+    const strippedLen = cleanContent.replace(/[\s-----]/g, '').length;
+    if (strippedLen < 80 || /-----|文章 \d|原文URL|TITLE:|CONTENT:|【第\d+篇】/i.test(cleanContent.substring(0, 120))) {
+      console.log(`   ⚠️ ID ${item.postId} 内容异常跳过(长度${strippedLen}，疑似翻译失败/模板残留): ${cleanContent.substring(0, 60)}`);
+      continue;
+    }
     const enhancedContent = cleanContent +
       `\n\n来源链接: ${item.originalTitle} (${item.url})` +
       `\n\n发布时间: ${new Date().toLocaleString('zh-CN')}`;
