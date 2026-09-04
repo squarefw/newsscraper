@@ -180,7 +180,14 @@ const pushToWordPressWithConnector = async (processedData, originalUrl, config, 
     // 构建文章数据
     const cleanTitle = finalCleanContent(processedData.finalTitle || processedData.originalTitle, 'title');
     const cleanContent = finalCleanContent(processedData.finalContent || processedData.originalContent, 'content');
-    
+
+    // 内容为空/过短保护：翻译或重写失败时（如原文抓取为空、AI返回空、仅剩模板残留），跳过发布
+    const strippedLen = cleanContent.replace(/[\s-----]/g, '').length;
+    if (strippedLen < 80 || /-----|文章 \d|原文URL|TITLE:|CONTENT:/i.test(cleanContent.substring(0, 120))) {
+      console.log(`   ⚠️ 内容异常跳过发布（长度${strippedLen}，疑似翻译失败或模板残留）: ${(cleanContent || '').substring(0, 80)}`);
+      return { success: false, error: '内容为空或疑似AI输出模板残留', skipped: true };
+    }
+
     // 添加来源链接和发布日期
     let enhancedContent = cleanContent;
     

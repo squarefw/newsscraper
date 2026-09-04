@@ -859,63 +859,79 @@ const chunkArticlesBySize = (articles, getContent, maxCharsPerBatch = 12000, max
 };
 
 const translateArticlesBatch = async (multiAIManager, articles, maxCharsPerBatch = 12000) => {
-  const batches = chunkArticlesBySize(articles, a => a.content, maxCharsPerBatch);
-  console.log(`\n🌐 开始批处理翻译 (${articles.length} 篇文章，${batches.length}批，每批≤${maxCharsPerBatch}字符)...`);
+  // 逐篇纯文本翻译：qwen-long 对 JSON 字段输出会压缩到数百字，纯文本才能输出完整长文。
+  // 每篇一次 AI 调用，输出"第一行标题 + 空行 + 完整译文正文"。
+  console.log(`\n🌐 开始逐篇翻译 (${articles.length} 篇文章)...`);
 
   const allResults = [];
-  const totalBatches = batches.length;
+  const engine = multiAIManager.getAgentForTask('translate');
 
-  for (let i = 0; i < batches.length; i++) {
-    const batch = batches[i];
-    console.log(`   📦 翻译批次 ${i + 1}/${totalBatches} (${batch.length}篇)...`);
+  for (let i = 0; i < articles.length; i++) {
+    const article = articles[i];
+    const url = article.url;
+    const title = article.title || '';
+    const content = article.content || '';
+    process.stdout.write(`   📄 翻译 ${i + 1}/${articles.length}: ${(title || url).substring(0, 45)}... `);
 
-    // 构建输入数据
-    const inputArticles = batch.map(article => ({
-      url: article.url,
-      title: article.title || '',
-      content: article.content || ''
-    }));
-
-    // 构建输入数据（文本形式，避免嵌套JSON诱导模型保守输出）
-    const inputText = batch.map((a, i) => {
-      const item = inputArticles[i] || a;
-      return `【第${i + 1}篇】\n原文URL: ${item.url}\n英文标题: ${item.title || ''}\n英文正文:\n${item.content || ''}`;
-    }).join('\n\n');
+    // 空内容直接跳过
+    if (!content || content.trim().length < 30) {
+      console.log('⚠️ 原文过短，跳过');
+      continue;
+    }
 
     const prompt = `你是资深中文新闻编辑。请把下面的英文新闻完整翻译成中文。
 
 **硬性要求：**
-1. 必须逐段完整翻译全文，不得概括、压缩、删减任何段落、句子或细节
+1. 必须完整翻译全文，不得概括、压缩、删减任何段落、句子或细节
 2. 保留所有具体事实、数字、人名、地名、机构名、引语和原文提到的日期
 3. 译文信息量必须与原文相当：原文约每 6 个英文字符对应 1 个中文字，译文总长度应接近原文字符数的 1/3 到 1/2（例如原文 6000 字符 → 译文应约 2000 中文字）
-4. 用专业新闻中文，段落分明，可直接发布
-5. 中文标题要准确概括新闻核心，可直接用作发布标题
+4. 用专业新闻中文，把原文零散的短句整合成通顺的自然段落（每段 3-6 句，约 80-160 字，全文约 8-15 段），不要一句一段
+5. 译文中不得包含任何 "=====" "文章N" "URL:" "TITLE:" 之类的分隔标记或说明文字
 
-**输出格式（必须严格遵循，只输出 JSON）：**
-{
-  "results": [
-    {"url": "原文URL", "translatedTitle": "中文标题", "translatedContent": "完整的全文翻译"}
-  ]
-}
+**输出格式（严格遵循）：**
+第一行：翻译后的中文新闻标题
+第二行：空行
+第三行起：完整的译文正文（整合成自然段落）
 
-注意：translatedContent 必须放入**完整且未经压缩**的中文全文。
-
-需要翻译的英文新闻：
-${inputText}`;
+英文新闻：
+${content}`;
 
     try {
-      const engine = multiAIManager.getAgentForTask('translate');
       const response = await engine.processContent(prompt, 'custom');
+      let text = (response || '').trim();
+      // 移除可能的代码围栏或多余前后缀
+      text = text.replace(/^```[\s\S]*?\n/, '').replace(/\n```\s*$/, '').trim();
 
-      // 解析 JSON 响应（含宽容回退，处理长译文中的转义问题）
-      const parsedResults = parseAiResultsArray(response);
+      // 解析：第一行=标题，其后为正文
+      const lines = text.split('\n');
+      let translatedTitle = '';
+      let bodyStart = 0;
+      // 找第一个非空行作为标题
+      for (let j = 0; j < lines.length; j++) {
+        if (lines[j].trim()) {
+          translatedTitle = lines[j].trim();
+          bodyStart = j + 1;
+          break;
+        }
+      }
+      // 跳过标题后的空行
+      while (bodyStart < lines.length && lines[bodyStart].trim() === '') bodyStart++;
+      const translatedContent = lines.slice(bodyStart).join('\n').trim();
 
-      console.log(`   ✅ 批次翻译完成: ${parsedResults.length} 篇`);
-      allResults.push(...parsedResults);
+      // 校验：若正文过短或疑似模板残留，记录但不中断
+      const strippedLen = translatedContent.replace(/[\s-----]/g, '').length;
+      if (strippedLen < 80 || /文章 \d|原文URL|TITLE:|CONTENT:|【第\d+篇】/i.test((translatedContent || '').substring(0, 150))) {
+        console.log(`⚠️ 翻译异常(长度${strippedLen}，疑似残留)，记录跳过`);
+        continue;
+      }
+
+      allResults.push({ url, translatedTitle: translatedTitle || title, translatedContent });
+      console.log(`✅ ${translatedContent.length}字`);
     } catch (error) {
-      console.error(`   ❌ 翻译批次 ${i + 1} 失败: ${error.message}`);
-      throw error;
+      console.error(`❌ 翻译失败: ${error.message.split('\n')[0]}`);
     }
+    // 避免请求过快
+    await new Promise(r => setTimeout(r, 400));
   }
 
   console.log(`   ✅ 翻译完成: ${allResults.length} 篇文章`);
@@ -929,68 +945,98 @@ ${inputText}`;
  * @returns {Array} 重写结果 [{url, rewrittenTitle, rewrittenContent, category}]
  */
 const rewriteAndCategorizeBatch = async (multiAIManager, articles, maxCharsPerBatch = 12000) => {
-  const batches = chunkArticlesBySize(articles, a => a.translatedContent, maxCharsPerBatch);
-  console.log(`\n✍️  开始批处理重写+分类 (${articles.length} 篇文章，${batches.length}批，每批≤${maxCharsPerBatch}字符)...`);
+  // 逐篇纯文本重写+分类：qwen-long 对 JSON 字段输出会压缩到数百字，纯文本才能输出完整长文。
+  // 每篇两步：1) 纯文本润色输出完整正文(首行标题)；2) 单独短调用取分类。
+  console.log(`\n✍️  开始逐篇重写+分类 (${articles.length} 篇文章)...`);
 
   const allResults = [];
-  const totalBatches = batches.length;
+  const engine = multiAIManager.getAgentForTask('rewrite');
 
-  for (let i = 0; i < batches.length; i++) {
-    const batch = batches[i];
-    console.log(`   📦 重写批次 ${i + 1}/${totalBatches} (${batch.length}篇)...`);
+  for (let i = 0; i < articles.length; i++) {
+    const article = articles[i];
+    const url = article.url;
+    const translatedTitle = article.translatedTitle || '';
+    const translatedContent = article.translatedContent || '';
+    process.stdout.write(`   ✍️ 重写 ${i + 1}/${articles.length}: ${(translatedTitle || url).substring(0, 45)}... `);
 
-    // 构建输入数据
-    const inputArticles = batch.map(article => ({
-      url: article.url,
-      translatedTitle: article.translatedTitle || '',
-      translatedContent: article.translatedContent || '',
-      originalTitle: article.originalTitle || ''
-    }));
+    if (!translatedContent || translatedContent.trim().length < 30) {
+      console.log('⚠️ 译文为空，跳过');
+      continue;
+    }
 
-    // 构建输入数据（文本形式，避免嵌套JSON诱导模型压缩内容）
-    const inputText = batch.map((a, i) => {
-      const item = inputArticles[i] || a;
-      return `【第${i + 1}篇】\n原文URL: ${item.url}\n英文原标题: ${item.originalTitle || ''}\n中文标题: ${item.translatedTitle || ''}\n中文译文全文:\n${item.translatedContent || ''}`;
-    }).join('\n\n');
-
-    const prompt = `你是资深中文新闻编辑。请对下面的中文新闻做专业的润色重写，并为每篇选择最合适的分类。
+    // ---- 第一步：纯文本润色 ----
+    const polishPrompt = `你是资深中文新闻编辑。请对下面的中文新闻做专业的润色重写，使成稿可直接发布。
 
 **硬性要求：**
-1. 必须完整保留译文的全部内容和信息，不得删减、压缩、概括任何段落、句子或细节
-2. 只优化语句通顺度、用词专业性和可读性（半官方媒体风格），使成稿可直接发布
-3. 保留所有具体事实、数字、人名、地名、机构名、引语
-4. rewrittenTitle 是准确简洁的中文发布标题
-5. rewrittenContent 是完整、未经压缩的重写全文
+1. 必须完整保留译文的全部内容和信息，不得删减、压缩、概括任何事实、数字、人名、引语
+2. 优化语句通顺度与用词专业性（半官方媒体风格）
+3. 重要：把零散的单句、短段**整合成连贯的自然报道段落**——同一主题相关内容合并成一段（每段 3-6 句，约 80-160 字），全文约 6-12 段，切忌一句一段
+4. 可调整语序使逻辑顺畅（导语在前），但不得丢失信息
+5. 译文中不得包含任何 "=====" "文章N" "URL:" 之类分隔标记或说明文字
 
-**分类（只能从下列选一个）：**
-中爱动态、时政要闻、财经商业、科技产业、社会民生、教育文化、移民法务、房产规划
-- 涉及中国与爱尔兰关系/合作/往来/华人社区的文章 → "中爱动态"
-- 爱尔兰本地新闻 → 按其主题选对应分类
-- 纯中国新闻、纯国际新闻（均与爱尔兰和中国无关）或低价值碎片内容 → "无法分类"
+**输出格式（严格遵循）：**
+第一行：润色后的中文新闻标题
+第二行：空行
+第三行起：完整润色后的正文（整合成自然段落）
 
-**输出格式（必须严格遵循，只输出 JSON）：**
-{
-  "results": [
-    {"url": "原文URL", "rewrittenTitle": "中文标题", "rewrittenContent": "完整的重写全文", "category": "分类名称"}
-  ]
-}
+待润色的中文新闻：
+${translatedContent}`;
 
-需要重写的中文新闻：
-${inputText}`;
-
+    let rewrittenTitle = translatedTitle;
+    let rewrittenContent = '';
+    let polishedOk = false;
     try {
-      const engine = multiAIManager.getAgentForTask('rewrite');
-      const response = await engine.processContent(prompt, 'custom');
+      const resp = await engine.processContent(polishPrompt, 'custom');
+      let text = (resp || '').trim();
+      text = text.replace(/^```[\s\S]*?\n/, '').replace(/\n```\s*$/, '').trim();
+      const lines = text.split('\n');
+      for (let j = 0; j < lines.length; j++) {
+        if (lines[j].trim()) { rewrittenTitle = lines[j].trim(); break; }
+      }
+      let bodyStart = 0;
+      while (bodyStart < lines.length && lines[bodyStart].trim() === '') bodyStart++;
+      rewrittenContent = lines.slice(bodyStart).join('\n').trim();
 
-      // 解析 JSON 响应（含宽容回退，处理长文本中的转义问题）
-      const parsedResults = parseAiResultsArray(response);
-
-      console.log(`   ✅ 批次重写+分类完成: ${parsedResults.length} 篇`);
-      allResults.push(...parsedResults);
-    } catch (error) {
-      console.error(`   ❌ 重写批次 ${i + 1} 失败: ${error.message}`);
-      throw error;
+      const strippedLen = rewrittenContent.replace(/[\s-----]/g, '').length;
+      polishedOk = strippedLen >= 80 && !/文章 \d|原文URL|TITLE:|CONTENT:|【第\d+篇】/i.test(rewrittenContent.substring(0, 150));
+      if (!polishedOk) {
+        console.log(`⚠️ 润色异常(长度${strippedLen})，尝试直接采用译文`);
+      }
+    } catch (err) {
+      console.log(`❌ 润色失败(${err.message.split('\n')[0]})，采用译文`);
     }
+
+    // 若润色失败或过短，回退使用原译文作为正文（翻译已含段落整合）
+    const finalContent = polishedOk ? rewrittenContent : translatedContent;
+    if (!finalContent || finalContent.trim().length < 80) {
+      console.log('⚠️ 正文为空，跳过');
+      continue;
+    }
+
+    // ---- 第二步：单独分类 ----
+    let category = '';
+    const catPrompt = `你是中文新闻分类专家。根据下面新闻内容，从这些分类中选一个最合适的：中爱动态、时政要闻、财经商业、科技产业、社会民生、教育文化、移民法务、房产规划。
+规则：涉及中国与爱尔兰关系/合作/华人社区→中爱动态；爱尔兰本地新闻按其主题选；纯中国/纯国际(与爱尔兰中国无关)或低价值碎片→无法分类。
+只输出一个分类词，不要其他文字。
+
+新闻标题：${rewrittenTitle}
+新闻内容(前800字)：
+${finalContent.substring(0, 800)}`;
+    try {
+      const catResp = await engine.processContent(catPrompt, 'custom');
+      category = (catResp || '').trim().replace(/[【】\s]/g, '');
+      // 规范化分类名
+      const validCats = ['中爱动态', '时政要闻', '财经商业', '科技产业', '社会民生', '教育文化', '移民法务', '房产规划', '无法分类'];
+      const matched = validCats.find(c => category.includes(c));
+      category = matched || '';
+    } catch (err) {
+      console.log(`   ⚠️ 分类失败(${err.message.split('\n')[0]})`);
+    }
+
+    allResults.push({ url, rewrittenTitle, rewrittenContent: finalContent, category });
+    console.log(`✅ ${finalContent.length}字${category ? ` [${category}]` : ''}`);
+    // 避免请求过快
+    await new Promise(r => setTimeout(r, 300));
   }
 
   console.log(`   ✅ 重写+分类完成: ${allResults.length} 篇文章`);
