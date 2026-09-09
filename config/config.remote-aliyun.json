@@ -22,9 +22,9 @@
             "cacheDuration": 3600000
         },
         "contentEnhancement": {
-            "addSourceLink": true,
+            "addSourceLink": false,
             "sourceLinkTemplate": "\n\n来源链接: {title} ({url})",
-            "addPublishDate": true,
+            "addPublishDate": false,
             "publishDateTemplate": "\n\n发布时间: {date}"
         }
     },

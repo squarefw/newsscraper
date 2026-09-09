@@ -220,11 +220,12 @@ const pushToWordPressWithConnector = async (processedData, originalUrl, config, 
       }
     }
 
-    // 摘要兜底：summary 为空或过短时，从正文自动截取 80-140 字，避免分类页只显示十几个字
+    // 摘要统一 60 字：列表页固定显示两行（与历史文章一致）
+    const EXCERPT_LENGTH = 60;
     const stripForExcerpt = (str) => str.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
-    const autoExcerpt = stripForExcerpt(cleanContent).slice(0, 140);
+    const autoExcerpt = stripForExcerpt(cleanContent).slice(0, EXCERPT_LENGTH);
     const rawSummary = (processedData.summary || '').trim();
-    const excerptText = rawSummary.length >= 40 ? rawSummary.slice(0, 160) : autoExcerpt;
+    const excerptText = rawSummary.length >= 30 ? rawSummary.slice(0, EXCERPT_LENGTH) : autoExcerpt;
 
     const postData = {
       title: cleanTitle,
