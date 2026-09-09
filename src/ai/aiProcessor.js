@@ -990,10 +990,12 @@ ${translatedContent}`;
       let text = (resp || '').trim();
       text = text.replace(/^```[\s\S]*?\n/, '').replace(/\n```\s*$/, '').trim();
       const lines = text.split('\n');
+      let titleLineIndex = 0;
       for (let j = 0; j < lines.length; j++) {
-        if (lines[j].trim()) { rewrittenTitle = lines[j].trim(); break; }
+        if (lines[j].trim()) { rewrittenTitle = lines[j].trim(); titleLineIndex = j; break; }
       }
-      let bodyStart = 0;
+      // 正文必须从标题行的下一行开始，否则标题会被重复写进正文第一段
+      let bodyStart = titleLineIndex + 1;
       while (bodyStart < lines.length && lines[bodyStart].trim() === '') bodyStart++;
       rewrittenContent = lines.slice(bodyStart).join('\n').trim();
 
