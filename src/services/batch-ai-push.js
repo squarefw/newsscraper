@@ -220,12 +220,25 @@ const pushToWordPressWithConnector = async (processedData, originalUrl, config, 
       }
     }
 
-    // 摘要统一 60 字：列表页固定显示两行（与历史文章一致）
+    // 摘要统一 60 字 + 省略号：列表页固定显示两行（与历史文章一致）
+    // ⚠️ 规则必须与 batch-set-excerpts.js 的 stripHtml() / makeExcerpt() 逐字一致，
+    //    否则该脚本每次全量跑都会把新文章判定为「需修改」而反复改写摘要。
     const EXCERPT_LENGTH = 60;
-    const stripForExcerpt = (str) => str.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
-    const autoExcerpt = stripForExcerpt(cleanContent).slice(0, EXCERPT_LENGTH);
+    const stripForExcerpt = (str) => str
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&quot;/g, '"')
+      .replace(/&#8217;/g, "'")
+      .replace(/&[a-z#0-9]+;/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    const makeExcerpt = (text) => {
+      if (text.length <= EXCERPT_LENGTH) return text;
+      return text.substring(0, EXCERPT_LENGTH) + '...';
+    };
     const rawSummary = (processedData.summary || '').trim();
-    const excerptText = rawSummary.length >= 30 ? rawSummary.slice(0, EXCERPT_LENGTH) : autoExcerpt;
+    const excerptText = makeExcerpt(rawSummary.length >= 30 ? rawSummary : stripForExcerpt(cleanContent));
 
     const postData = {
       title: cleanTitle,
