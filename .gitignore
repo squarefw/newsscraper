@@ -97,3 +97,13 @@ screenshots/
 # UCD folder
 UCD/
 .gstack/
+
+# 本地明文凭据 —— 绝对不能提交（2026-09-11 加）
+# 根目录的 wp-admin 存着站点管理员账号密码，之前未被忽略，git add -A 会推到 GitHub
+/wp-admin
+/*-credentials*
+/*credentials*
+/*-password*
+/*password*
+/*-token*
+/.secrets*
