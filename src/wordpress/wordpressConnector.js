@@ -6,6 +6,7 @@
 const https = require('https');
 const http = require('http');
 const { URL } = require('url');
+const xml2js = require('xml2js');
 
 class WordPressConnector {
   constructor(config) {
@@ -212,6 +213,277 @@ class WordPressConnector {
     } catch (error) {
       throw new Error(`获取文章失败: ${error.message}`);
     }
+  }
+
+  /**
+   * 获取文章总数（用于分页计算）。
+   * 优先匿名 REST（读取 x-wp-total 响应头），失败再试认证 REST；
+   * 都不可用时返回 null，由调用方按“翻到空页”方式处理。
+   * @param {string} status 文章状态，默认 publish
+   * @returns {Promise<number|null>}
+   */
+  async getPostsTotal(status = 'publish') {
+    // 1) 匿名 REST（REST Basic Auth 失效时匿名读取仍可用）
+    for (const withAuth of [false, true]) {
+      try {
+        const res = await this.restCountRaw(status, withAuth);
+        const total = parseInt(res.headers['x-wp-total'], 10);
+        if (res.statusCode === 200 && !Number.isNaN(total)) {
+          return total;
+        }
+      } catch (e) {
+        // 尝试下一种方式
+      }
+    }
+    return null;
+  }
+
+  /**
+   * 只取文章总数用的轻量 REST 请求（per_page=1，读响应头）
+   */
+  async restCountRaw(status, withAuth) {
+    return new Promise((resolve, reject) => {
+      const url = new URL(`${this.config.baseUrl}/wp-json/wp/v2/posts?per_page=1&status=${encodeURIComponent(status)}&_fields=id`);
+      const client = url.protocol === 'https:' ? https : http;
+
+      const headers = { 'User-Agent': 'WordPress-Connector/1.0' };
+      if (withAuth) {
+        headers['Authorization'] = 'Basic ' + Buffer.from(`${this.config.username}:${this.config.password}`).toString('base64');
+      }
+
+      const req = client.request({
+        hostname: url.hostname,
+        port: url.port || (url.protocol === 'https:' ? 443 : 80),
+        path: url.pathname + url.search,
+        method: 'GET',
+        headers,
+        timeout: 15000
+      }, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => resolve({ statusCode: res.statusCode, headers: res.headers, data }));
+      });
+
+      req.on('error', reject);
+      req.on('timeout', () => {
+        req.destroy();
+        reject(new Error('请求超时'));
+      });
+      req.end();
+    });
+  }
+
+  /**
+   * 获取文章列表（含 raw 正文/摘要），按当前通道自动选择 REST 或 XML-RPC。
+   * REST 走 context=edit 取 raw；XML-RPC 的 wp.getPosts 本身就返回 raw。
+   * @param {{offset?:number, number?:number, status?:string}} opts
+   * @returns {Promise<Array<{id:number, title:string, content:string, excerpt:string, status:string}>>}
+   */
+  async getPostsRaw({ offset = 0, number = 100, status = 'publish' } = {}) {
+    if (!this.preferredMethod) {
+      await this.detectBestMethod();
+    }
+
+    if (this.preferredMethod === 'rest') {
+      try {
+        return await this.getPostsRawRest({ offset, number, status });
+      } catch (error) {
+        // REST 中途失效（如认证被收回）时降级到 XML-RPC
+        console.warn(`⚠️ REST 获取文章失败，降级 XML-RPC: ${error.message}`);
+        return this.getPostsRawXMLRPC({ offset, number, status });
+      }
+    }
+    return this.getPostsRawXMLRPC({ offset, number, status });
+  }
+
+  /**
+   * 通过 REST API 获取文章列表（context=edit，取 raw 字段）
+   */
+  async getPostsRawRest({ offset, number, status }) {
+    const endpoint = `posts?per_page=${number}&offset=${offset}&status=${encodeURIComponent(status)}`
+      + `&context=edit&_fields=id,title,content,excerpt,status&orderby=date&order=desc`;
+    const result = await this.makeRestRequest(endpoint, 'GET');
+
+    if (result.statusCode !== 200) {
+      throw new Error(`REST 获取文章失败: HTTP ${result.statusCode} ${String(result.data).substring(0, 120)}`);
+    }
+
+    const posts = JSON.parse(result.data);
+    return posts.map(post => ({
+      id: post.id,
+      title: (post.title && (post.title.raw || post.title.rendered)) || '',
+      content: (post.content && (post.content.raw || post.content.rendered)) || '',
+      excerpt: (post.excerpt && (post.excerpt.raw || post.excerpt.rendered)) || '',
+      status: post.status || ''
+    }));
+  }
+
+  /**
+   * 通过 XML-RPC 获取文章列表（wp.getPosts 直接返回 raw 的 post_content / post_excerpt）
+   */
+  async getPostsRawXMLRPC({ offset, number, status }) {
+    const result = await this.xmlrpcCall('wp.getPosts', [
+      1, // blog_id
+      this.config.username,
+      this.config.password,
+      {
+        number,
+        offset,
+        post_status: status,
+        orderby: 'post_date',
+        order: 'DESC'
+      }
+    ]);
+
+    if (result.statusCode !== 200) {
+      throw new Error(`XML-RPC 获取文章失败: HTTP ${result.statusCode}`);
+    }
+    if (/<fault>/i.test(result.data)) {
+      throw new Error(`XML-RPC 获取文章失败: ${this.extractXmlrpcFault(result.data)}`);
+    }
+
+    return this.parseXMLRPCPostStructs(result.data);
+  }
+
+  /**
+   * 用 xml2js 解析 XML-RPC 的 post struct 数组（含 raw 正文/摘要）。
+   * 注意：post struct 内含 terms / custom_fields 等嵌套 struct，正则解析会截断，
+   * 因此这里走真正的 XML 解析。
+   */
+  async parseXMLRPCPostStructs(xmlData) {
+    const parsed = await xml2js.parseStringPromise(xmlData, { explicitArray: true });
+    const params = parsed && parsed.methodResponse && parsed.methodResponse.params;
+    if (!params || !params[0] || !params[0].param || !params[0].param[0]) return [];
+
+    const list = this.xmlValueToJs(params[0].param[0].value);
+    if (!Array.isArray(list)) return [];
+
+    return list.map(item => ({
+      id: parseInt(item.post_id, 10),
+      title: item.post_title || '',
+      content: item.post_content || '',
+      excerpt: item.post_excerpt || '',
+      status: item.post_status || ''
+    }));
+  }
+
+  /**
+   * 把 xml2js 解析出的 <value> 节点转换成原生 JS 值
+   */
+  xmlValueToJs(valueNode) {
+    if (!valueNode) return '';
+    const node = Array.isArray(valueNode) ? valueNode[0] : valueNode;
+    if (!node || typeof node !== 'object') return '';
+
+    const type = Object.keys(node)[0];
+    const inner = node[type];
+
+    switch (type) {
+      case 'string':
+        return inner ? String(inner[0]) : '';
+      case 'int':
+      case 'i4':
+        return parseInt(inner[0], 10);
+      case 'i8':
+        return Number(inner[0]);
+      case 'double':
+        return parseFloat(inner[0]);
+      case 'boolean':
+        return String(inner[0]) === '1';
+      case 'dateTime.iso8601':
+        return String(inner[0]);
+      case 'base64':
+        return inner ? String(inner[0]) : '';
+      case 'nil':
+        return null;
+      case 'array': {
+        const data = inner && inner[0] && inner[0].data ? inner[0].data[0] : null;
+        if (!data || !data.value) return [];
+        return data.value.map(v => this.xmlValueToJs(v));
+      }
+      case 'struct': {
+        const obj = {};
+        const members = (inner && inner[0] && inner[0].member) || [];
+        for (const m of members) {
+          obj[m.name[0]] = this.xmlValueToJs(m.value);
+        }
+        return obj;
+      }
+      default:
+        return inner ? String(inner[0]) : '';
+    }
+  }
+
+  /**
+   * 从 XML-RPC fault 响应中提取 faultString
+   */
+  extractXmlrpcFault(xmlData) {
+    const m = String(xmlData).match(/<name>faultString<\/name>\s*<value>\s*<string>([\s\S]*?)<\/string>/i);
+    return m ? m[1] : 'XML-RPC fault';
+  }
+
+  /**
+   * 更新文章正文/摘要（按当前通道自动选择 REST 或 XML-RPC）。
+   * 只更新传入的字段。
+   * @param {number|string} postId
+   * @param {{content?:string, excerpt?:string}} fields
+   * @returns {Promise<{success:boolean, method:string, postId:*}>}
+   */
+  async updatePost(postId, { content, excerpt } = {}) {
+    if (!this.preferredMethod) {
+      await this.detectBestMethod();
+    }
+
+    if (this.preferredMethod === 'rest') {
+      try {
+        return await this.updatePostRest(postId, { content, excerpt });
+      } catch (error) {
+        console.warn(`⚠️ REST 更新失败，降级 XML-RPC: ${error.message}`);
+        return this.updatePostXMLRPC(postId, { content, excerpt });
+      }
+    }
+    return this.updatePostXMLRPC(postId, { content, excerpt });
+  }
+
+  /**
+   * 通过 REST API 更新文章
+   */
+  async updatePostRest(postId, { content, excerpt }) {
+    const body = {};
+    if (content !== undefined) body.content = content;
+    if (excerpt !== undefined) body.excerpt = excerpt;
+
+    const result = await this.makeRestRequest(`posts/${postId}`, 'POST', JSON.stringify(body));
+    if (result.statusCode !== 200) {
+      throw new Error(`REST 更新失败: HTTP ${result.statusCode} ${String(result.data).substring(0, 120)}`);
+    }
+    const post = JSON.parse(result.data);
+    return { success: true, method: 'rest', postId: post.id };
+  }
+
+  /**
+   * 通过 XML-RPC 更新文章（wp.editPost）
+   */
+  async updatePostXMLRPC(postId, { content, excerpt }) {
+    const fields = {};
+    if (content !== undefined) fields.post_content = content;
+    if (excerpt !== undefined) fields.post_excerpt = excerpt;
+
+    const result = await this.xmlrpcCall('wp.editPost', [
+      1, // blog_id
+      this.config.username,
+      this.config.password,
+      postId,
+      fields
+    ]);
+
+    if (result.statusCode !== 200) {
+      throw new Error(`XML-RPC 更新失败: HTTP ${result.statusCode}`);
+    }
+    if (/<fault>/i.test(result.data)) {
+      throw new Error(`XML-RPC 更新失败: ${this.extractXmlrpcFault(result.data)}`);
+    }
+    return { success: true, method: 'xmlrpc', postId };
   }
 
   /**

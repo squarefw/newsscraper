@@ -5,6 +5,11 @@
  *   2. 末尾的「发布时间: ...」段落
  *   3. 开头与标题重复的段落
  *
+ * 数据通道：WordPressConnector 自动选择 REST / XML-RPC。
+ *   - REST 可用时走 context=edit 取 raw
+ *   - REST Basic Auth 失效（如 JWT 插件被停用）时自动降级 XML-RPC 的 wp.getPosts / wp.editPost
+ *     （XML-RPC 直接返回 raw 的 post_content，写回即原文，不会引入额外 HTML）
+ *
  * 用法：
  *   node scripts/cleanup-post-content.js --dry-run          # 只统计，不修改
  *   node scripts/cleanup-post-content.js --dry-run --pages=3
@@ -13,13 +18,13 @@
 
 const fs = require('fs');
 const path = require('path');
+const WordPressConnector = require('../src/wordpress/wordpressConnector');
 
 const ROOT = path.join(__dirname, '..');
 const config = JSON.parse(fs.readFileSync(path.join(ROOT, 'config/api-keys.local.json'), 'utf8'));
 const creds = config.wordpress['remote-aliyun'];
-const AUTH = Buffer.from(creds.username + ':' + creds.password).toString('base64');
 
-const BASE = 'http://www.i0086.ie/wp-json/wp/v2/posts';
+const BASE_URL = 'http://www.i0086.ie';
 const PER_PAGE = 100;
 const CONCURRENCY = 12;
 
@@ -27,11 +32,6 @@ const args = process.argv.slice(2);
 const DRY_RUN = args.includes('--dry-run');
 const pagesArg = args.find(a => a.startsWith('--pages='));
 const MAX_PAGES = pagesArg ? parseInt(pagesArg.split('=')[1], 10) : Infinity;
-
-const headers = {
-  'Authorization': 'Basic ' + AUTH,
-  'Content-Type': 'application/json'
-};
 
 /** 去掉标签、HTML 实体和所有空白，用于比较 */
 function normalize(s) {
@@ -107,50 +107,48 @@ function cleanContent(raw, title) {
   return { cleaned, removed, changed: removed.length > 0 };
 }
 
-async function fetchPage(page) {
-  const url = `${BASE}?per_page=${PER_PAGE}&page=${page}&orderby=date&order=desc&context=edit&_fields=id,title,content`;
-  const r = await fetch(url, { headers });
-  if (!r.ok) throw new Error(`Fetch page ${page} failed: ${r.status}`);
-  return r.json();
-}
-
-async function updatePost(id, content) {
-  const r = await fetch(`${BASE}/${id}`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ content })
-  });
-  if (!r.ok) {
-    const body = await r.text();
-    throw new Error(`Update ${id} failed: ${r.status} ${body.substring(0, 120)}`);
-  }
-  return r.json();
-}
-
 async function run() {
-  const first = await fetch(`${BASE}?per_page=1&_fields=id`, { headers });
-  const total = parseInt(first.headers.get('x-wp-total'), 10);
-  const totalPages = Math.min(Math.ceil(total / PER_PAGE), MAX_PAGES);
-  console.log(`[START] 共 ${total} 篇，处理 ${totalPages} 页${DRY_RUN ? '（DRY RUN，不写入）' : ''}`);
+  const connector = new WordPressConnector({
+    baseUrl: BASE_URL,
+    username: creds.username,
+    password: creds.password
+  });
+
+  const method = await connector.detectBestMethod();
+  console.log(`[CHANNEL] ${method === 'rest' ? 'REST API' : 'XML-RPC'}`);
+
+  const total = await connector.getPostsTotal('publish');
+  const totalPages = total ? Math.ceil(total / PER_PAGE) : Infinity;
+  const limit = Math.min(totalPages, MAX_PAGES);
+  console.log(`[START] 共 ${total ?? '未知'} 篇，处理 ${Number.isFinite(limit) ? limit : '按需'} 页${DRY_RUN ? '（DRY RUN，不写入）' : ''}`);
 
   let scanned = 0, changed = 0, updated = 0, failed = 0;
   let titleDup = 0, srcRemoved = 0, dateRemoved = 0;
 
-  for (let page = 1; page <= totalPages; page++) {
+  for (let page = 1; page <= limit; page++) {
     let posts;
     try {
-      posts = await fetchPage(page);
+      posts = await connector.getPostsRaw({
+        offset: (page - 1) * PER_PAGE,
+        number: PER_PAGE,
+        status: 'publish'
+      });
     } catch (e) {
       console.log(`[ERROR] page ${page}: ${e.message}`);
       failed += PER_PAGE;
       continue;
     }
 
+    if (!posts.length) {
+      console.log(`[DONE] 第 ${page} 页无数据，提前结束`);
+      break;
+    }
+
     const tasks = [];
     for (const post of posts) {
       scanned++;
-      const title = (post.title && post.title.raw) || '';
-      const raw = (post.content && post.content.raw) || '';
+      const title = post.title || '';
+      const raw = post.content || '';
       const { cleaned, removed, changed: didChange } = cleanContent(raw, title);
       if (!didChange) continue;
       changed++;
@@ -168,7 +166,7 @@ async function run() {
         while (idx < tasks.length) {
           const t = tasks[idx++];
           try {
-            await updatePost(t.id, t.cleaned);
+            await connector.updatePost(t.id, { content: t.cleaned });
             updated++;
           } catch (e) {
             failed++;
@@ -179,7 +177,7 @@ async function run() {
       await Promise.all(Array.from({ length: CONCURRENCY }, worker));
     }
 
-    console.log(`[PROGRESS] page ${page}/${totalPages} | scanned=${scanned} changed=${changed} updated=${updated} failed=${failed}`);
+    console.log(`[PROGRESS] page ${page}/${Number.isFinite(limit) ? limit : '?'} | scanned=${scanned} changed=${changed} updated=${updated} failed=${failed}`);
   }
 
   console.log(`\n[DONE] 扫描 ${scanned} | 需清理 ${changed} | 已更新 ${updated} | 失败 ${failed}`);
