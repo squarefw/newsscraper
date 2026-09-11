@@ -89,10 +89,12 @@ test-output/
 examples/*
 !examples/README.md
 
-# Browser cache and automation artifacts  
+# Browser cache and automation artifacts
 .browser_cache/
 screenshots/
 *.har
+# Playwright MCP 的截图缓存（可重建，2026-09-11 曾积累到 108MB / 1249 个文件）
+.playwright-mcp/
 
 # UCD folder
 UCD/
