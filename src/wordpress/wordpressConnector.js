@@ -368,6 +368,19 @@ class WordPressConnector {
   }
 
   /**
+   * 解析 XML-RPC 返回的单个 struct（如 wp.getPost）
+   * @returns {Promise<Object|null>}
+   */
+  async parseXMLRPCSingleStruct(xmlData) {
+    const parsed = await xml2js.parseStringPromise(xmlData, { explicitArray: true });
+    const params = parsed && parsed.methodResponse && parsed.methodResponse.params;
+    if (!params || !params[0] || !params[0].param || !params[0].param[0]) return null;
+
+    const value = this.xmlValueToJs(params[0].param[0].value);
+    return (value && typeof value === 'object' && !Array.isArray(value)) ? value : null;
+  }
+
+  /**
    * 把 xml2js 解析出的 <value> 节点转换成原生 JS 值
    */
   xmlValueToJs(valueNode) {
@@ -1083,6 +1096,10 @@ class WordPressConnector {
    */
   async verifyFeaturedImage(postId) {
     try {
+      if (!this.preferredMethod) {
+        await this.detectBestMethod();
+      }
+
       if (this.preferredMethod === 'rest') {
         const result = await this.makeRestRequest(`posts/${postId}`, 'GET');
         if (result.statusCode === 200) {
@@ -1094,25 +1111,46 @@ class WordPressConnector {
             method: 'rest'
           };
         }
-      } else {
-        // 使用 XML-RPC 获取文章信息
-        const result = await this.xmlrpcCall('wp.getPost', [
-          this.config.username,
-          this.config.password,
-          postId
-        ]);
-        
-        if (result.success) {
-          // 简单检查响应中是否包含 featured_image
-          const hasImage = result.data.includes('<name>featured_image</name>');
-          return {
-            success: true,
-            hasImage,
-            method: 'xmlrpc'
-          };
-        }
+        return { success: false, error: `HTTP ${result.statusCode}` };
       }
-      return { success: false };
+
+      // 使用 XML-RPC 获取文章信息
+      // 注意 wp.getPost 签名是 (blog_id, username, password, post_id, fields)，
+      // 不能省略 blog_id，否则返回 fault「该 XML-RPC 方法需要更多参数」。
+      const result = await this.xmlrpcCall('wp.getPost', [
+        1, // blog_id
+        this.config.username,
+        this.config.password,
+        postId
+      ]);
+
+      if (result.statusCode !== 200) {
+        return { success: false, error: `HTTP ${result.statusCode}` };
+      }
+      if (/<fault>/i.test(result.data)) {
+        return { success: false, error: this.extractXmlrpcFault(result.data) };
+      }
+
+      const post = await this.parseXMLRPCSingleStruct(result.data);
+      if (!post) {
+        return { success: false, error: '无法解析 wp.getPost 响应' };
+      }
+
+      // 有特色图时 post_thumbnail 是 struct（含 attachment_id），无图时是空数组
+      const thumb = post.post_thumbnail;
+      let featuredMediaId;
+      if (Array.isArray(thumb)) {
+        featuredMediaId = thumb[0] && thumb[0].attachment_id ? parseInt(thumb[0].attachment_id, 10) : undefined;
+      } else if (thumb && typeof thumb === 'object') {
+        featuredMediaId = thumb.attachment_id ? parseInt(thumb.attachment_id, 10) : undefined;
+      }
+
+      return {
+        success: true,
+        hasImage: !!featuredMediaId,
+        featuredMediaId,
+        method: 'xmlrpc'
+      };
     } catch (error) {
       console.warn('验证特色图片失败:', error.message);
       return { success: false, error: error.message };
