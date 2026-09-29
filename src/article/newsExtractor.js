@@ -42,21 +42,23 @@ async function extractNewsFromUrl(url) {
         const selectors = [
             'meta[property="og:description"]',
             'meta[name="description"]',
-            'article p', 
-            '.article-body p', 
+            'article p',
+            '.article-body p',
             '.story-body p',
             '.main-content p',
-            '.post-content p'
+            '.post-content p',
+            '.article-body-redesign p',
+            '.article-content-redesign p'
         ];
 
         // 优先尝试文章主体
-        $('article p, .article-body p, .story-body p, .main-content p').each((i, elem) => {
+        $('article p, .article-body p, .story-body p, .main-content p, .article-body-redesign p, .article-content-redesign p').each((i, elem) => {
             content += $(elem).text().trim() + '\n';
         });
 
         // 3. 兜底方案：如果没抓到正文，尝试 meta description
         if (content.length < 50) {
-            const metaDesc = $('meta[property="og:description"]').attr('content') || 
+            const metaDesc = $('meta[property="og:description"]').attr('content') ||
                              $('meta[name="description"]').attr('content');
             if (metaDesc) {
                 content = metaDesc + '\n' + content;
@@ -64,7 +66,8 @@ async function extractNewsFromUrl(url) {
         }
 
         // 4.1 尝试 JSON-LD (Schema.org Article)
-        if (content.length < 100) {
+        // 注意: og:description 只有一两句，阈值须高于它，否则 articleBody 永远没机会兜底
+        if (content.length < 800) {
             $('script[type="application/ld+json"]').each((i, elem) => {
                 try {
                     const json = JSON.parse($(elem).html());
