@@ -6,6 +6,8 @@ services:
     image: newsscraper:latest
     container_name: newsscraper-unified
     restart: unless-stopped
+    # tini 作为 PID 1 回收孤儿进程，防止 Chromium 僵尸进程累积撑爆 PID 上限
+    init: true
     environment:
       - NODE_ENV=production
       - TZ=Europe/Dublin
