@@ -6,14 +6,14 @@
 //     （XML-RPC 直接返回 raw 的 post_content / post_excerpt）
 //
 // 用法：
-//   node batch-set-excerpts.js                # 全量执行
-//   node batch-set-excerpts.js --dry-run      # 只统计，不写入
-//   node batch-set-excerpts.js --pages=2      # 只处理前 2 页（每页 100 篇）
+//   node scripts/batch-set-excerpts.js                # 全量执行
+//   node scripts/batch-set-excerpts.js --dry-run      # 只统计，不写入
+//   node scripts/batch-set-excerpts.js --pages=2      # 只处理前 2 页（每页 100 篇）
 const fs = require('fs');
 const path = require('path');
-const WordPressConnector = require('./src/wordpress/wordpressConnector');
+const WordPressConnector = require('../src/wordpress/wordpressConnector');
 
-const config = require('./config/api-keys.local.json');
+const config = require('../config/api-keys.local.json');
 const creds = config.wordpress['remote-aliyun'];
 
 const BASE_URL = 'http://www.i0086.ie';

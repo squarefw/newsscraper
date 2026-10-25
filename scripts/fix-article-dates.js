@@ -16,10 +16,11 @@ const { URL } = require('url');
 const fs = require('fs');
 
 // WordPress 配置
+const wpCreds = require('../config/api-keys.local.json').wordpress['remote-aliyun'];
 const CONFIG = {
   baseUrl: 'http://www.i0086.ie',
-  username: 'i0086editor',
-  password: '***REMOVED***'
+  username: wpCreds.username,
+  password: wpCreds.password
 };
 
 // 日期匹配正则：仅匹配"正文开头"的孤立日期段（body 已去除 HTML 前缀）

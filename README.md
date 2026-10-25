@@ -24,9 +24,9 @@
 │   ├── ai-prompts.json        # AI 角色与任务提示词模板
 │   ├── config.remote-aliyun.json # 阿里云 WordPress 生产配置
 │   └── targets.json           # RSS 与 Google News 监控源配置
+├── scripts/                   # 运维与维护脚本
 ├── Dockerfile                 # 包含 Puppeteer 和 Python 依赖的容器定义
-├── deploy-enhanced.sh         # 一键部署至 230 服务器的增强脚本
-└── simple-deploy.sh           # 极简快速部署脚本
+└── deploy-enhanced.sh         # 一键部署至 230 服务器的增强脚本
 ```
 
 ## 🚀 快速开始
@@ -55,8 +55,8 @@ node src/services/unified-service-cron.js --test
 ## 📖 核心文档
 
 - [API 密钥配置指南](docs/API_KEYS_SETUP.md)
-- [部署指南](DEPLOYMENT_GUIDE.md)
-- [快速导航](QUICKSTART.md)
+- [文档索引](docs/README.md)
+- [批量推送指南](docs/BATCH_AI_PUSH_GUIDE.md)
 
 ## 🛠️ 技术栈
 

@@ -63,7 +63,7 @@
 
 ### 步骤 3: 准备 URL 文件
 
-创建或编辑 URL 文件（如 `examples/wordpress-test-urls.txt`）：
+创建或编辑 URL 文件（如 `examples/pending-urls.txt`）：
 
 ```
 # WordPress 增强版测试URL列表
@@ -75,7 +75,7 @@ https://www.rte.ie/news/business/2025/0805/1567890-business-update/
 
 ```bash
 # 使用远程配置运行增强版
-NODE_ENV=remote-aliyun node tools/batch-ai-push-enhanced.js examples/wordpress-test-urls.txt
+NODE_ENV=remote-aliyun node src/services/batch-ai-push.js examples/pending-urls.txt
 ```
 
 ## 📊 功能对比

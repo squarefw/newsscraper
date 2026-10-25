@@ -163,7 +163,7 @@ if (article.isEditorPick) {
 
 ### 部署说明
 
-- `src/` 改动需要重建镜像（`./simple-deploy.sh weifang@192.168.1.230`，约 5-8 分钟）
+- `src/` 改动需要重建镜像（`./deploy-enhanced.sh`，约 5-8 分钟）
 - 无需修改配置文件
 
 ### 验证方法

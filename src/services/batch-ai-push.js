@@ -61,21 +61,9 @@ const loadConfig = (configPath) => {
 
 // 动态加载aiProcessor
 const loadAIProcessor = () => {
-  try {
-    // 优先使用JavaScript版本（支持动态分类）
-    const aiProcessor = require('../ai/aiProcessor');
-    console.log('✅ AI处理器加载成功 (JavaScript版本 - 支持动态分类)');
-    return aiProcessor;
-  } catch (error) {
-    try {
-      // 回退到TypeScript版本
-      const aiProcessor = require('../../dist/aiProcessor');
-      console.log('✅ AI处理器加载成功 (TypeScript版本 - 基础功能)');
-      return aiProcessor;
-    } catch (fallbackError) {
-      throw new Error(`AI处理器加载失败: ${error.message}, 回退失败: ${fallbackError.message}`);
-    }
-  }
+  const aiProcessor = require('../ai/aiProcessor');
+  console.log('✅ AI处理器加载成功 (JavaScript版本 - 支持动态分类)');
+  return aiProcessor;
 };
 
 // 读取URL文件
@@ -172,14 +160,28 @@ const finalCleanContent = (content, type = 'content') => {
   return cleaned;
 };
 
+// 模型把思考过程当正文返回的特征（如 "We need answer..." / "我们需要回答用户..."）
+const REASONING_START = /^(We need|Need\b|Let me|Okay\b|Alright\b|我们需要|我们需|需要输出|需要决定|需要给|需要构建|让我)/i;
+const looksLikeReasoning = (text) => {
+  if (!text || typeof text !== 'string') return false;
+  const head = text.replace(/^[\s"'「」『』]+/, '').substring(0, 200);
+  return REASONING_START.test(head);
+};
+
 // 使用新WordPress连接器推送文章
 const pushToWordPressWithConnector = async (processedData, originalUrl, config, wpConnector, featuredMediaId = null) => {
   try {
     console.log(`📤 准备推送到WordPress: ${processedData.finalTitle || processedData.originalTitle}`);
-    
+
     // 构建文章数据
     const cleanTitle = finalCleanContent(processedData.finalTitle || processedData.originalTitle, 'title');
     const cleanContent = finalCleanContent(processedData.finalContent || processedData.originalContent, 'content');
+
+    // 模型思考过程泄漏保护：标题或正文以思考语句开头时跳过发布
+    if (looksLikeReasoning(cleanTitle) || looksLikeReasoning(cleanContent)) {
+      console.log(`   ⚠️ 检测到模型思考文本，跳过发布: ${(cleanTitle || '').substring(0, 80)}`);
+      return { success: false, error: 'AI输出为思考过程', skipped: true };
+    }
 
     // 内容为空/过短保护：翻译或重写失败时（如原文抓取为空、AI返回空、仅剩模板残留），跳过发布
     const strippedLen = cleanContent.replace(/[\s-----]/g, '').length;

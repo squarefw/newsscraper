@@ -1,11 +1,11 @@
 #!/bin/bash
 
 # 部署增强版Puppeteer解析器到远程服务器
-# 基于现有的deploy.sh，针对高级反检测功能优化
+# 一键部署脚本：构建镜像、传输代码、启动 unified-service-cron 调度
 
 set -e
 
-# 配置变量 - 使用与simple-deploy.sh相同的配置
+# 配置变量
 REMOTE_HOST="${1:-weifang@192.168.1.230}"
 APP_NAME="newsscraper"
 # 使用用户主目录避免权限问题

@@ -5,16 +5,17 @@
  * 将 "和平卫队" 替换为 "爱尔兰警方"（标题和正文都处理）
  *
  * 用法:
- *   node src/services/fix-gardai-terms.js
- *   node src/services/fix-gardai-terms.js --dry-run   # 只扫描不修改
+ *   node scripts/fix-gardai-terms.js
+ *   node scripts/fix-gardai-terms.js --dry-run   # 只扫描不修改
  */
 
 const axios = require('axios');
 
+const apiKeys = require('../config/api-keys.local.json');
 const config = {
   baseUrl: 'http://8.208.23.37',
-  username: 'i0086editor',
-  password: '***REMOVED***'
+  username: apiKeys.wordpress['remote-aliyun'].username,
+  password: apiKeys.wordpress['remote-aliyun'].password
 };
 
 const OLD_TERM = '和平卫队';

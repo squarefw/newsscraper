@@ -119,42 +119,67 @@ class GoogleNewsDecoder {
    * and can successfully retrieve the signature and decode the URL without 429 errors.
    */
   async decodeViaPython(url) {
-    return new Promise((resolve) => {
-      const { exec } = require('child_process');
-      const script = `
+    const { exec } = require('child_process');
+
+    // URL 以 JSON 字符串字面量注入，避免引号/特殊字符破坏脚本
+    const urlLiteral = JSON.stringify(url);
+    const script = `
 import sys, json
 try:
     import googlenewsdecoder
-    res = googlenewsdecoder.gnewsdecoder('${url}')
+    res = googlenewsdecoder.gnewsdecoder(${urlLiteral})
     if isinstance(res, dict):
-        print(json.dumps({"status": res.get("status", False), "url": res.get("decoded_url")}))
+        ok = res.get("status", res.get("success", False))
+        url = res.get("decoded_url") or res.get("url")
+        err = res.get("error") or res.get("message")
+        print(json.dumps({"status": bool(ok), "url": url, "error": err}))
     else:
         print(json.dumps({"status": True, "url": res}))
 except Exception as e:
     print(json.dumps({"status": False, "error": str(e)}))
 `;
-      
-      const b64 = Buffer.from(script).toString('base64');
-      const cmd = `export PYTHONPATH=$PYTHONPATH:/opt/homebrew/lib/python3.9/site-packages && echo "${b64}" | base64 -d | /opt/homebrew/bin/python3.9`;
-      
-      exec(cmd, { timeout: 15000 }, (error, stdout, stderr) => {
 
-        if (error) {
-          resolve({ status: false, error: "Python execution failed: " + (error.message || stderr) });
-          return;
-        }
-        try {
-          const parsed = JSON.parse(stdout.trim());
-          if (parsed.status && parsed.url) {
-            resolve({ status: true, url: parsed.url, method: 'hybrid_python' });
-          } else {
-            resolve({ status: false, error: parsed.error || "Unknown python decode error" });
-          }
-        } catch (parseError) {
-          resolve({ status: false, error: "Failed to parse Python output: " + stdout });
-        }
+    const b64 = Buffer.from(script).toString('base64');
+    // 容器内是 /usr/bin/python3；本机 macOS 可能是 homebrew 的 python3.9
+    const candidates = [
+      { bin: 'python3', pyPath: '' },
+      { bin: '/usr/bin/python3', pyPath: '' },
+      { bin: '/opt/homebrew/bin/python3.9', pyPath: '/opt/homebrew/lib/python3.9/site-packages' }
+    ];
+
+    const runWith = (bin, pyPath) => new Promise((resolve) => {
+      const env = pyPath ? `PYTHONPATH=$PYTHONPATH:${pyPath} ` : '';
+      const cmd = `${env}echo "${b64}" | base64 -d | ${bin}`;
+      exec(cmd, { timeout: 15000 }, (error, stdout, stderr) => {
+        resolve({ error, stdout, stderr });
       });
     });
+
+    let lastError = null;
+    for (const { bin, pyPath } of candidates) {
+      const { error, stdout, stderr } = await runWith(bin, pyPath);
+
+      if (error) {
+        lastError = error.message || stderr || '';
+        continue;
+      }
+      try {
+        const parsed = JSON.parse(stdout.trim());
+        if (parsed.status && parsed.url) {
+          return { status: true, url: parsed.url, method: 'hybrid_python' };
+        }
+        // 该解释器没装 googlenewsdecoder，换下一个候选
+        if (/No module named/.test(parsed.error || '')) {
+          lastError = parsed.error;
+          continue;
+        }
+        return { status: false, error: parsed.error || 'Unknown python decode error' };
+      } catch (parseError) {
+        lastError = "Failed to parse Python output: " + stdout;
+      }
+    }
+
+    return { status: false, error: "Python execution failed: " + lastError };
   }
 }
 

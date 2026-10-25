@@ -5,18 +5,19 @@
  * 批量处理模式下标题被截断到60字符，此脚本用AI根据正文重新生成完整标题
  *
  * 用法:
- *   node src/services/regenerate-truncated-titles.js [--dry-run] [--limit N]
+ *   node scripts/regenerate-truncated-titles.js [--dry-run] [--limit N]
  */
 
 const axios = require('axios');
 const path = require('path');
-const ConfigLoader = require('../config/loader');
-const { MultiAIManager } = require('../ai/multiAIManager');
+const ConfigLoader = require('../src/config/loader');
+const { MultiAIManager } = require('../src/ai/multiAIManager');
 
+const wpCreds = require('../config/api-keys.local.json').wordpress['remote-aliyun'];
 const WP = {
   baseUrl: 'http://8.208.23.37',
-  username: 'i0086editor',
-  password: '***REMOVED***'
+  username: wpCreds.username,
+  password: wpCreds.password
 };
 const wpUrl = `${WP.baseUrl}/wp-json/wp/v2/posts`;
 const auth = 'Basic ' + Buffer.from(`${WP.username}:${WP.password}`).toString('base64');
@@ -96,7 +97,7 @@ async function main() {
   }
 
   // 加载 AI
-  const configPath = path.resolve(__dirname, '../../', 'config/config.remote-aliyun.json');
+  const configPath = path.resolve(__dirname, '..', 'config/config.remote-aliyun.json');
   const configLoader = new ConfigLoader();
   const env = configLoader.inferEnvironment(configPath);
   const config = configLoader.loadConfig(configPath, env);

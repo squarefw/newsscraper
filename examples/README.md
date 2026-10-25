@@ -9,13 +9,9 @@
 
 - `pending-urls.txt` - 新闻发现系统生成的待处理URL队列
 - `filter-report.txt` - AI新闻筛选系统生成的过滤报告
-- `test-urls.txt` - 测试用的URL列表
 
-### 示例配置文件
-这些文件可以作为模板使用：
-
-- `sample-urls.txt` - 示例URL格式模板
-- `wordpress-test-urls.txt` - WordPress测试用URL模板
+### 手动测试
+`pending-urls.txt` 可直接作为 `batch-ai-push` 的输入；需要自定义测试时新建自己的 URL 文件即可（格式为每行一个 URL）。
 
 ## 🚫 注意事项
 
@@ -35,7 +31,7 @@ echo "https://example-news.com/article2" >> examples/test-urls.txt
 ### 运行处理脚本
 ```bash
 # 使用examples中的URL文件
-node tools/production/batch-ai-push.js config/config.remote-aliyun.json examples/test-urls.txt
+node src/services/batch-ai-push.js config/config.remote-aliyun.json examples/test-urls.txt
 ```
 
 ### 查看生成的报告

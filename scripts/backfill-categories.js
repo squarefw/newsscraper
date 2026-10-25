@@ -15,9 +15,9 @@
  */
 
 const path = require('path');
-const ConfigLoader = require('../config/loader');
-const WordPressConnector = require('../wordpress/wordpressConnector');
-const { validateAndGetCategoryId } = require('../ai/aiProcessor');
+const ConfigLoader = require('../src/config/loader');
+const WordPressConnector = require('../src/wordpress/wordpressConnector');
+const { validateAndGetCategoryId } = require('../src/ai/aiProcessor');
 
 // 与批处理重写 prompt 一致的分类选项（映射到 WP 真实分类）
 const CATEGORY_OPTIONS = ['政治时事', '经济', '科技', '体育', '娱乐', '社会', '国际', '犯罪', '生活', '都市新闻', '最新新闻', '热点新闻'];
@@ -57,7 +57,7 @@ async function main() {
   const args = process.argv.slice(2);
   let configPath = args[0] || 'config/config.remote-aliyun.json';
   let after = args[1] || '2026-08-15T00:00:00Z';
-  if (!path.isAbsolute(configPath)) configPath = path.resolve(__dirname, '../../', configPath);
+  if (!path.isAbsolute(configPath)) configPath = path.resolve(__dirname, '..', configPath);
 
   console.log('🚀 开始回填文章分类');
   console.log('='.repeat(60));
@@ -82,7 +82,7 @@ async function main() {
   console.log(`✅ 获取到 ${wpCategories.length} 个 WP 分类`);
 
   // AI 管理器
-  const { MultiAIManager } = require('../ai/multiAIManager');
+  const { MultiAIManager } = require('../src/ai/multiAIManager');
   const ai = new MultiAIManager(config);
   await ai.initialize();
   const engine = ai.getAgentForTask('categorize');

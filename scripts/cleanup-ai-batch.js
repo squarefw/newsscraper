@@ -2,9 +2,9 @@
 
 const fs = require('fs');
 const path = require('path');
-const ConfigLoader = require('../config/loader');
-const WordPressConnector = require('../wordpress/wordpressConnector');
-const { MultiAIManager } = require('../ai/multiAIManager');
+const ConfigLoader = require('../src/config/loader');
+const WordPressConnector = require('../src/wordpress/wordpressConnector');
+const { MultiAIManager } = require('../src/ai/multiAIManager');
 
 const stripHtml = (h) => String(h||'').replace(/<[^>]+>/g,' ').replace(/&[a-z]+;/g,' ').replace(/\s+/g,' ').trim();
 

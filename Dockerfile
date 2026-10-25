@@ -20,7 +20,7 @@ RUN apk add --no-cache \
     && rm -rf /var/cache/apk/*
 
 # 安装 Python 库
-RUN python3 -m pip install googlenewsdecoder --break-system-packages
+RUN python3 -m pip install "googlenewsdecoder==0.1.7" "selectolax<1.0" --break-system-packages
 
 # 创建应用目录
 WORKDIR /app
@@ -46,7 +46,7 @@ ENV NODE_ENV=production
 # 创建非 root 用户
 RUN addgroup -g 1001 -S nodejs
 RUN adduser -S nodeuser -u 1001
-RUN chown -R nodeuser:nodejs /app
+RUN mkdir -p /app/logs && chown nodeuser:nodejs /app/logs
 USER nodeuser
 
 # 暴露端口（如果需要 web-quality-tester）
@@ -57,4 +57,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
   CMD node -e "console.log('Health check passed')" || exit 1
 
 # 默认启动命令
-CMD ["node", "tools/production/batch-ai-push.js", "config/config.remote-230.json", "examples/pending-urls.txt"]
+CMD ["node", "src/services/unified-service-cron.js", "config/config.remote-aliyun.json"]

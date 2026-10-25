@@ -77,13 +77,13 @@ nano config/api-keys.local.json
 
 ```bash
 # 原有命令无需更改，会自动加载密钥
-node tools/production/batch-ai-push.js config/config.remote-aliyun.json
+node src/services/batch-ai-push.js config/config.remote-aliyun.json
 ```
 
 ### 手动加载配置
 
 ```javascript
-const ConfigLoader = require('./config/config-loader');
+const ConfigLoader = require('./src/config/loader');
 
 const configLoader = new ConfigLoader();
 const config = configLoader.loadConfig('config/config.remote-aliyun.json', 'remote-aliyun');
@@ -128,7 +128,7 @@ const config = configLoader.loadConfig('config/config.remote-aliyun.json', 'remo
 ```bash
 # 测试配置加载
 node -e "
-const ConfigLoader = require('./config/config-loader');
+const ConfigLoader = require('./src/config/loader');
 const loader = new ConfigLoader();
 const config = loader.loadConfig('config/config.remote-aliyun.json', 'remote-aliyun');
 console.log('WordPress用户:', config.wordpress.username);

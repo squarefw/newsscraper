@@ -4,7 +4,7 @@
   "description": "Automated news content scraper with AI optimization and API integration.",
   "main": "src/services/batch-ai-push.js",
   "scripts": {
-    "start": "node src/services/batch-ai-push.js config/config.remote-aliyun.json examples/wordpress-test-urls.txt",
+    "start": "node src/services/batch-ai-push.js config/config.remote-aliyun.json examples/pending-urls.txt",
     "discover": "node src/services/discover-and-queue.js",
     "service": "node src/services/unified-service.js",
     "cron": "node src/services/unified-service-cron.js"

@@ -191,7 +191,7 @@ NewsScraper 现在支持多AI引擎分工合作，不同的AI任务可以由不�
 
 ```bash
 # 使用配置文件运行
-node tools/production/batch-ai-push-enhanced.js config/config.remote-aliyun.json examples/sample-urls.txt
+node src/services/batch-ai-push.js config/config.remote-aliyun.json examples/sample-urls.txt
 ```
 
 ## 优势

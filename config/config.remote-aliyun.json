@@ -31,20 +31,20 @@
     "ai": {
         "enabled": true,
         "processingMode": "original",
-        "defaultEngine": "qwen",
+        "defaultEngine": "anthropic",
         "taskEngines": {
-            "translate": "qwen",
-            "rewrite": "qwen",
-            "summarize": "qwen",
-            "extract_keywords": "qwen",
-            "categorize": "qwen",
-            "sentiment": "qwen",
-            "custom_title_translate": "qwen",
-            "custom_title_generate": "qwen",
-            "article_filter": "qwen",
-            "article_qualification": "qwen",
-            "deduplication": "qwen",
-            "unified_translate_rewrite": "qwen"
+            "translate": "anthropic",
+            "rewrite": "anthropic",
+            "summarize": "anthropic",
+            "extract_keywords": "anthropic",
+            "categorize": "anthropic",
+            "sentiment": "anthropic",
+            "custom_title_translate": "anthropic",
+            "custom_title_generate": "anthropic",
+            "article_filter": "anthropic",
+            "article_qualification": "anthropic",
+            "deduplication": "anthropic",
+            "unified_translate_rewrite": "anthropic"
         },
         "fallbackStrategy": "useDefault",
         "engines": {
@@ -108,6 +108,16 @@
                 "maxTokens": 32000,
                 "temperature": 0.3,
                 "timeout": 180000
+            },
+            "anthropic": {
+                "apiKey": "FROM_API_KEYS_CONFIG",
+                "baseUrl": "http://192.168.1.230:3000/claude-custom",
+                "model": "claude-haiku-4-5",
+                "maxTokens": 8000,
+                "temperature": 0.3,
+                "timeout": 180000,
+                "thinking": true,
+                "thinkingBudget": 2048
             }
         },
         "tasks": [

@@ -18,9 +18,9 @@
 
 const fs = require('fs');
 const path = require('path');
-const ConfigLoader = require('../config/loader');
-const WordPressConnector = require('../wordpress/wordpressConnector');
-const NewsArticleFilter = require('../article/newsArticleFilter');
+const ConfigLoader = require('../src/config/loader');
+const WordPressConnector = require('../src/wordpress/wordpressConnector');
+const NewsArticleFilter = require('../src/article/newsArticleFilter');
 
 // 死亡公告关键词预过滤（复用 newsArticleFilter.js 的逻辑）
 const DEATH_NOTICE_KEYWORDS_EN = [
@@ -112,7 +112,7 @@ const chunkBySize = (items, getText, maxChars = 12000) => {
 async function main() {
   const args = process.argv.slice(2);
   let configPath = args[0] || 'config/config.remote-aliyun.json';
-  if (!path.isAbsolute(configPath)) configPath = path.resolve(__dirname, '../../', configPath);
+  if (!path.isAbsolute(configPath)) configPath = path.resolve(__dirname, '..', configPath);
 
   console.log('🧹 开始文章清理扫描');
   console.log('='.repeat(60));
@@ -200,7 +200,7 @@ async function main() {
 
   // 2. AI 批处理判断质量/重复
   console.log('🤖 步骤 2/3: AI 批处理判断质量/重复...');
-  const { MultiAIManager } = require('../ai/multiAIManager');
+  const { MultiAIManager } = require('../src/ai/multiAIManager');
   const ai = new MultiAIManager(config);
   await ai.initialize();
   const engine = ai.getAgentForTask('article_qualification');

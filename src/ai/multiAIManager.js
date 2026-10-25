@@ -57,6 +57,10 @@ class MultiAIManager {
           case 'qwen':
             agent = this.createQwenAgent(engineConfig);
             break;
+
+          case 'anthropic':
+            agent = this.createAnthropicAgent(engineConfig);
+            break;
             
           default:
             console.warn(`Unknown AI engine: ${engineName}`);
@@ -141,6 +145,9 @@ class MultiAIManager {
           break;
         case 'qwen':
           agent = this.createQwenAgent(engineConfig);
+          break;
+        case 'anthropic':
+          agent = this.createAnthropicAgent(engineConfig);
           break;
         default:
           throw new Error(`Unsupported AI engine: ${engineName}`);
@@ -250,6 +257,53 @@ class MultiAIManager {
           console.error(`Error calling Qwen API: ${error.message}`);
           if (error.response) {
             console.error('Qwen API Error Response:', JSON.stringify(error.response.data, null, 2));
+          }
+          throw error;
+        }
+      }
+    };
+  }
+
+  /**
+   * 创建Anthropic (Messages API)代理
+   */
+  createAnthropicAgent(config) {
+    if (!config.apiKey || !config.baseUrl) {
+      throw new Error('Anthropic apiKey or baseUrl is not configured.');
+    }
+
+    return {
+      name: 'anthropic',
+      processContent: async (content, task) => {
+        const prompt = this.getPromptForTask(content, task);
+        const apiUrl = config.baseUrl.replace(/\/$/, '') + '/v1/messages';
+
+        try {
+          const response = await axios.post(apiUrl, {
+            model: config.model,
+            max_tokens: config.maxTokens || 4000,
+            // 代理后端会把推理链塞进 text 块并耗尽 max_tokens，必须关闭思考
+            thinking: config.thinking ? { type: 'enabled', budget_tokens: config.thinkingBudget || 2048 } : { type: 'disabled' },
+            messages: [{ role: 'user', content: prompt }]
+          }, {
+            headers: {
+              'x-api-key': config.apiKey,
+              'anthropic-version': '2023-06-01',
+              'Content-Type': 'application/json'
+            },
+            timeout: config.timeout || 180000
+          });
+
+          const blocks = response.data.content || [];
+          const text = blocks.filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
+          if (!text) {
+            throw new Error('Empty response from Anthropic API');
+          }
+          return this.cleanAIOutput(text, task);
+        } catch (error) {
+          console.error(`Error calling Anthropic API: ${error.message}`);
+          if (error.response) {
+            console.error('Anthropic API Error Response:', JSON.stringify(error.response.data, null, 2).substring(0, 500));
           }
           throw error;
         }
